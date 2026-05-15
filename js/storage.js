@@ -36,10 +36,18 @@ const Storage = (() => {
 
   function mapPlan(r) {
     if (!r) return null;
-    return { id: r.id, projectId: r.project_id, name: r.name || '', pdfData: r.pdf_data || '', thumbData: r.thumb_data || '', createdAt: r.created_at };
+    const raw = r.pdf_data || '';
+    let pdfData = '', pages = null;
+    if (raw.startsWith('[')) {
+      try { pages = JSON.parse(raw); } catch(e) { pdfData = raw; }
+    } else {
+      pdfData = raw;
+    }
+    return { id: r.id, projectId: r.project_id, name: r.name || '', pdfData, pages, thumbData: r.thumb_data || '', createdAt: r.created_at };
   }
   function planToRow(p) {
-    return { id: p.id, project_id: p.projectId, name: p.name || null, pdf_data: p.pdfData || null, thumb_data: p.thumbData || null, created_at: p.createdAt };
+    const pdfVal = p.pages ? JSON.stringify(p.pages) : (p.pdfData || null);
+    return { id: p.id, project_id: p.projectId, name: p.name || null, pdf_data: pdfVal, thumb_data: p.thumbData || null, created_at: p.createdAt };
   }
 
   function generateId() {

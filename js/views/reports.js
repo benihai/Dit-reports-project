@@ -151,48 +151,60 @@ const ReportsView = (() => {
     e.target.value = '';
     if (!files.length || !_projectId) return;
 
-    App.showLoading('טוען תוכניות...');
-    try {
-      for (const file of files) {
+    for (const file of files) {
+      App.showLoading(`ממיר תוכנית: ${file.name.replace(/\.pdf$/i, '')}...`);
+      try {
         const arrayBuffer = await file.arrayBuffer();
         const uint8Array  = new Uint8Array(arrayBuffer);
 
-        // דחיסת PDF: יצירת blob דחוס (קטן בכ-50%)
-        const blob = new Blob([uint8Array], { type: 'application/pdf' });
-        const compressedBase64 = await new Promise((res) => {
-          const reader = new FileReader();
-          reader.onload = () => res(reader.result.split(',')[1]);
-          reader.readAsDataURL(blob);
-        });
-        const pdfData = `data:application/pdf;base64,${compressedBase64}`;
+        if (typeof pdfjsLib === 'undefined') throw new Error('ספריית PDF לא נטענה');
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+          'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
 
-        const pdfDoc  = await pdfjsLib.getDocument({ data: uint8Array }).promise;
-        const page    = await pdfDoc.getPage(1);
-        const viewport = page.getViewport({ scale: 0.4 });
-        const canvas  = document.createElement('canvas');
-        canvas.width  = viewport.width;
-        canvas.height = viewport.height;
-        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-        const thumbData = canvas.toDataURL('image/jpeg', 0.35);
+        const pdfDoc = await pdfjsLib.getDocument({ data: uint8Array }).promise;
+
+        // Rasterise each page to a compressed JPEG
+        const pages = [];
+        for (let p = 1; p <= pdfDoc.numPages; p++) {
+          App.showLoading(`ממיר עמוד ${p}/${pdfDoc.numPages}...`);
+          const page   = await pdfDoc.getPage(p);
+          const vp1    = page.getViewport({ scale: 1 });
+          const scale  = Math.min(1400 / vp1.width, 1400 / vp1.height, 2);
+          const vp     = page.getViewport({ scale });
+          const canvas = document.createElement('canvas');
+          canvas.width  = Math.round(vp.width);
+          canvas.height = Math.round(vp.height);
+          await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+          pages.push(canvas.toDataURL('image/jpeg', 0.72));
+        }
+
+        // Thumbnail from first page
+        const page1  = await pdfDoc.getPage(1);
+        const tvp    = page1.getViewport({ scale: 0.3 });
+        const tc     = document.createElement('canvas');
+        tc.width  = Math.round(tvp.width);
+        tc.height = Math.round(tvp.height);
+        await page1.render({ canvasContext: tc.getContext('2d'), viewport: tvp }).promise;
+        const thumbData = tc.toDataURL('image/jpeg', 0.4);
 
         const plan = {
           id:        Storage.generateId(),
           projectId: _projectId,
           name:      file.name.replace(/\.pdf$/i, ''),
-          pdfData,
+          pages,
           thumbData,
           createdAt: Date.now(),
         };
         await Storage.Plans.save(plan);
+        App.toast(`"${plan.name}" הועלתה (${pdfDoc.numPages} עמודים)`);
+      } catch (err) {
+        App.toast(`שגיאה: ${err.message}`);
+        console.error(err);
+      } finally {
+        App.hideLoading();
       }
-      App.toast(files.length > 1 ? `${files.length} תוכניות הועלו` : 'תוכנית הועלתה');
-      await refreshPlanLibrary();
-    } catch (err) {
-      App.toast('שגיאה בטעינת התוכנית');
-      console.error(err);
-    } finally {
-      App.hideLoading();
     }
+    await refreshPlanLibrary();
   }
 
   async function deletePlan(planId) {

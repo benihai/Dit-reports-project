@@ -25,6 +25,7 @@ const NoteModal = (() => {
     return `
       <div class="media-thumb">
         <img src="${item.data}" alt="תמונה ${index + 1}">
+        <button class="annotate-media" type="button" title="סמן על תמונה" onclick="NoteModal.annotateMedia(${index})">✏️</button>
         <button class="remove-media" type="button" onclick="NoteModal.removeMedia(${index})">✕</button>
       </div>
     `;
@@ -199,6 +200,18 @@ const NoteModal = (() => {
     refreshMediaGrid();
   }
 
+  function annotateMedia(index) {
+    const item = _mediaItems[index];
+    if (!item || item.type !== 'image') return;
+    PdfMarkup.openForImage({
+      imageData: item.data,
+      onSave: (annotatedData) => {
+        _mediaItems[index] = { ...item, data: annotatedData };
+        refreshMediaGrid();
+      },
+    });
+  }
+
   // ── PLAN MARKUP ──────────────────────────────────────────────────────────────
   function openPlanMarkup(planId) {
     if (!_reportId) return;
@@ -264,5 +277,5 @@ const NoteModal = (() => {
     document.getElementById('note-modal-overlay')?.classList.add('hidden');
   }
 
-  return { open, handleMedia, removeMedia, openPlanMarkup, removePlanMarkup, submit, close };
+  return { open, handleMedia, removeMedia, annotateMedia, openPlanMarkup, removePlanMarkup, submit, close };
 })();

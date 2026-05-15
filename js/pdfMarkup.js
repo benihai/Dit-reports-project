@@ -1,7 +1,9 @@
 const PdfMarkup = (() => {
   let _planId     = null;
   let _reportId   = null;
-  let _pdfDoc     = null;
+  let _pdfDoc     = null;          // pdfjs doc (old format only)
+  let _planPages  = null;          // Image[] for new rasterised format
+  let _imageMode  = false;         // true when annotating a plain image (not a plan)
   let _pageNum    = 1;
   let _totalPages = 1;
   let _pdfCanvas  = null;
@@ -12,100 +14,158 @@ const PdfMarkup = (() => {
   let _drawing    = false;
   let _startX     = 0;
   let _startY     = 0;
-  // Store strokes as rendered canvas snapshots per page (base64)
-  let _pageStates = {};   // { pageNum: [base64, base64, ...] }  — stack for undo
-  let _pins       = [];   // [{ x, y, noteId, color, page }]
+  let _pageStates = {};   // { pageNum: [base64, ...] } undo stack
+  let _pins       = [];
   let _notes      = [];
-  let _onSaveCallback = null;  // fn(imageBase64, planId, planName)
+  let _onSaveCallback = null;
   let _planName   = '';
 
   const COLORS = ['#dc2626', '#f97316', '#16a34a', '#2563eb', '#000000'];
 
-  // ── OPEN ────────────────────────────────────────────────────────────────────
-  // openForNote: called from NoteModal to annotate a plan for a specific note
-  async function openForNote({ planId, reportId, existingImage, onSave }) {
-    _planId          = planId;
-    _reportId        = reportId;
-    _onSaveCallback  = onSave;
-    _pageStates      = {};
-    _pins            = [];
-    _pageNum         = 1;
-    _tool            = 'pen';
-    _color           = '#dc2626';
+  // ── OPEN FOR PLAN (from NoteModal) ───────────────────────────────────────────
+  async function openForNote({ planId, reportId, onSave }) {
+    _planId         = planId;
+    _reportId       = reportId;
+    _onSaveCallback = onSave;
+    _imageMode      = false;
+    _pageStates     = {};
+    _pins           = [];
+    _pageNum        = 1;
+    _tool           = 'pen';
+    _color          = '#dc2626';
 
     const plan = await Storage.Plans.get(planId);
     if (!plan) { App.toast('תוכנית לא נמצאה'); return; }
     _planName = plan.name;
     _notes    = await Storage.Notes.getForReport(reportId);
 
-    const screen = document.getElementById('markup-screen');
-    screen.classList.remove('hidden');
-    screen.innerHTML = buildUi();
-
-    // בקשה לFullscreen ו-Landscape mode
-    if (document.documentElement.requestFullscreen) {
-      document.documentElement.requestFullscreen().catch(err => console.log('Fullscreen failed:', err));
-    }
-    if (window.screen?.orientation) {
-      window.screen.orientation.lock('landscape-primary').catch(err => console.log('Orientation lock failed:', err));
-    }
+    _buildScreen(false);
 
     _pdfCanvas  = document.getElementById('markup-pdf-canvas');
     _drawCanvas = document.getElementById('markup-draw-canvas');
     _ctx        = _drawCanvas.getContext('2d');
 
-    if (typeof pdfjsLib !== 'undefined') {
-      pdfjsLib.GlobalWorkerOptions.workerSrc =
-        'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
-    }
-
-    const base64 = plan.pdfData.split(',')[1];
-    const binary = atob(base64);
-    const bytes  = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-
     App.showLoading('טוען תוכנית...');
     try {
-      _pdfDoc     = await pdfjsLib.getDocument({ data: bytes }).promise;
-      _totalPages = _pdfDoc.numPages;
-      await renderPage(_pageNum);
-      bindCanvasEvents();
+      if (plan.pages && plan.pages.length) {
+        // New rasterised format — preload Image objects
+        _pdfDoc    = null;
+        _planPages = await Promise.all(plan.pages.map(src => {
+          return new Promise(res => {
+            const img = new Image();
+            img.onload = () => res(img);
+            img.onerror = () => res(null);
+            img.src = src;
+          });
+        }));
+        _totalPages = _planPages.length;
+      } else if (plan.pdfData) {
+        // Legacy raw-PDF format
+        _planPages = null;
+        if (typeof pdfjsLib === 'undefined') throw new Error('PDF library not loaded');
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+          'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+        const base64 = plan.pdfData.split(',')[1];
+        const binary = atob(base64);
+        const bytes  = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        _pdfDoc     = await pdfjsLib.getDocument({ data: bytes }).promise;
+        _totalPages = _pdfDoc.numPages;
+      } else {
+        throw new Error('אין נתוני תוכנית');
+      }
+      await _renderPage(_pageNum);
+      _bindCanvasEvents();
     } catch (err) {
-      App.toast('שגיאה בטעינת PDF');
+      App.toast('שגיאה בטעינת התוכנית');
       console.error(err);
     } finally {
       App.hideLoading();
     }
   }
 
-  function buildUi() {
+  // ── OPEN FOR IMAGE (from NoteModal image annotation) ─────────────────────────
+  async function openForImage({ imageData, onSave }) {
+    _imageMode      = true;
+    _pdfDoc         = null;
+    _planPages      = null;
+    _planId         = null;
+    _reportId       = null;
+    _onSaveCallback = onSave;
+    _pageStates     = {};
+    _pins           = [];
+    _pageNum        = 1;
+    _totalPages     = 1;
+    _tool           = 'pen';
+    _color          = '#dc2626';
+    _notes          = [];
+
+    _buildScreen(true);  // hidePin=true, hidePagination=true
+
+    _pdfCanvas  = document.getElementById('markup-pdf-canvas');
+    _drawCanvas = document.getElementById('markup-draw-canvas');
+    _ctx        = _drawCanvas.getContext('2d');
+
+    App.showLoading('טוען תמונה...');
+    try {
+      const img = await new Promise((res, rej) => {
+        const i = new Image();
+        i.onload  = () => res(i);
+        i.onerror = () => rej(new Error('שגיאה בטעינת תמונה'));
+        i.src = imageData;
+      });
+      const avail = _availSize();
+      const scale = Math.min(avail.w / img.naturalWidth, avail.h / img.naturalHeight, 1);
+      _pdfCanvas.width  = _drawCanvas.width  = Math.round(img.naturalWidth  * scale);
+      _pdfCanvas.height = _drawCanvas.height = Math.round(img.naturalHeight * scale);
+      _pdfCanvas.getContext('2d').drawImage(img, 0, 0, _pdfCanvas.width, _pdfCanvas.height);
+      _bindCanvasEvents();
+    } catch (err) {
+      App.toast('שגיאה בטעינת התמונה');
+      console.error(err);
+    } finally {
+      App.hideLoading();
+    }
+  }
+
+  // ── SCREEN BUILD ─────────────────────────────────────────────────────────────
+  function _buildScreen(imageMode) {
+    const screen = document.getElementById('markup-screen');
+    screen.classList.remove('hidden');
+    screen.innerHTML = _buildUi(imageMode);
+  }
+
+  function _buildUi(imageMode) {
     const colorBtns = COLORS.map(c =>
       `<button class="markup-color-btn ${c===_color?'active':''}" style="background:${c};"
         onclick="PdfMarkup.setColor('${c}')" data-color="${c}"></button>`
     ).join('');
 
+    const toolBtns = [
+      _toolBtn('pen',    '✏️', 'עיפרון'),
+      _toolBtn('marker', '🖊️', 'מרקר'),
+      _toolBtn('arrow',  '➡️', 'חץ'),
+      _toolBtn('text',   'T',  'טקסט'),
+      ...(imageMode ? [] : [_toolBtn('pin', '📌', 'סיכה')]),
+    ].join('');
+
+    const pageNav = imageMode ? '' : `
+      <div class="markup-toolbar-group" style="margin-right:auto;">
+        <div class="markup-page-nav">
+          <button onclick="PdfMarkup.prevPage()">‹</button>
+          <span id="markup-page-info">עמוד 1</span>
+          <button onclick="PdfMarkup.nextPage()">›</button>
+        </div>
+      </div>`;
+
     return `
       <div class="markup-toolbar">
-        <div class="markup-toolbar-group">
-          ${toolBtn('pen',   '✏️', 'עיפרון')}
-          ${toolBtn('marker','🖊️', 'מרקר')}
-          ${toolBtn('arrow', '➡️', 'חץ')}
-          ${toolBtn('text',  'T',  'טקסט')}
-          ${toolBtn('pin',   '📌', 'סיכה')}
-        </div>
-        <div class="markup-toolbar-group">
-          ${colorBtns}
-        </div>
+        <div class="markup-toolbar-group">${toolBtns}</div>
+        <div class="markup-toolbar-group">${colorBtns}</div>
         <div class="markup-toolbar-group">
           <button class="markup-tool-btn" title="בטל" onclick="PdfMarkup.undo()">↩️</button>
         </div>
-        <div class="markup-toolbar-group" style="margin-right:auto;">
-          <div class="markup-page-nav">
-            <button onclick="PdfMarkup.prevPage()">‹</button>
-            <span id="markup-page-info">עמוד 1</span>
-            <button onclick="PdfMarkup.nextPage()">›</button>
-          </div>
-        </div>
+        ${pageNav}
       </div>
 
       <div class="markup-canvas-wrap">
@@ -119,71 +179,89 @@ const PdfMarkup = (() => {
 
       <div class="markup-actions">
         <button class="btn btn-outline" onclick="PdfMarkup.close()">ביטול</button>
-        <button class="btn btn-primary" onclick="PdfMarkup.save()">שמור סימון להערה</button>
+        <button class="btn btn-primary" onclick="PdfMarkup.save()">${imageMode ? 'שמור תמונה מסומנת' : 'שמור סימון להערה'}</button>
       </div>
     `;
   }
 
-  function toolBtn(id, icon, title) {
+  function _toolBtn(id, icon, title) {
     return `<button class="markup-tool-btn ${_tool===id?'active':''}" title="${title}"
       onclick="PdfMarkup.setTool('${id}')" id="tool-btn-${id}">${icon}</button>`;
   }
 
-  // ── RENDER PAGE ─────────────────────────────────────────────────────────────
-  async function renderPage(num) {
-    const page     = await _pdfDoc.getPage(num);
-    const maxW     = window.innerWidth * 0.9;
-    const scale    = Math.min(maxW / page.getViewport({ scale: 1 }).width, 2.5);
-    const viewport = page.getViewport({ scale });
+  // ── AVAILABLE SIZE ────────────────────────────────────────────────────────────
+  function _availSize() {
+    const toolbarH  = 62;
+    const actionsH  = 62;
+    const paddingH  = 24;
+    const paddingW  = 24;
+    return {
+      w: window.innerWidth  - paddingW,
+      h: window.innerHeight - toolbarH - actionsH - paddingH,
+    };
+  }
 
-    _pdfCanvas.width  = _drawCanvas.width  = viewport.width;
-    _pdfCanvas.height = _drawCanvas.height = viewport.height;
+  // ── RENDER PAGE ──────────────────────────────────────────────────────────────
+  async function _renderPage(num) {
+    const avail = _availSize();
 
-    await page.render({ canvasContext: _pdfCanvas.getContext('2d'), viewport }).promise;
+    if (_planPages) {
+      // New rasterised image format
+      const img = _planPages[num - 1];
+      if (!img) return;
+      const scale = Math.min(avail.w / img.naturalWidth, avail.h / img.naturalHeight, 1.5);
+      _pdfCanvas.width  = _drawCanvas.width  = Math.round(img.naturalWidth  * scale);
+      _pdfCanvas.height = _drawCanvas.height = Math.round(img.naturalHeight * scale);
+      _pdfCanvas.getContext('2d').drawImage(img, 0, 0, _pdfCanvas.width, _pdfCanvas.height);
+    } else if (_pdfDoc) {
+      // Legacy raw-PDF format
+      const page  = await _pdfDoc.getPage(num);
+      const vp1   = page.getViewport({ scale: 1 });
+      const scale = Math.min(avail.w / vp1.width, avail.h / vp1.height, 2.5);
+      const vp    = page.getViewport({ scale });
+      _pdfCanvas.width  = _drawCanvas.width  = Math.round(vp.width);
+      _pdfCanvas.height = _drawCanvas.height = Math.round(vp.height);
+      await page.render({ canvasContext: _pdfCanvas.getContext('2d'), viewport: vp }).promise;
+    }
 
-    document.getElementById('markup-page-info').textContent =
-      `עמוד ${num} / ${_totalPages}`;
+    const infoEl = document.getElementById('markup-page-info');
+    if (infoEl) infoEl.textContent = `עמוד ${num} / ${_totalPages}`;
 
     // Restore existing strokes for this page
     const states = _pageStates[num];
-    if (states && states.length > 0) {
+    _ctx.clearRect(0, 0, _drawCanvas.width, _drawCanvas.height);
+    if (states?.length) {
       const img = new Image();
-      await new Promise(resolve => {
-        img.onload = resolve;
-        img.src = states[states.length - 1];
-      });
+      await new Promise(res => { img.onload = res; img.src = states[states.length - 1]; });
       _ctx.drawImage(img, 0, 0);
-    } else {
-      _ctx.clearRect(0, 0, _drawCanvas.width, _drawCanvas.height);
     }
 
-    renderPins();
+    _renderPins();
   }
 
   // ── CANVAS EVENTS ────────────────────────────────────────────────────────────
-  function bindCanvasEvents() {
-    _drawCanvas.addEventListener('mousedown',  onDown);
-    _drawCanvas.addEventListener('mousemove',  onMove);
-    _drawCanvas.addEventListener('mouseup',    onUp);
-    _drawCanvas.addEventListener('touchstart', e => { e.preventDefault(); onDown(toMouse(e)); }, { passive: false });
-    _drawCanvas.addEventListener('touchmove',  e => { e.preventDefault(); onMove(toMouse(e)); }, { passive: false });
-    _drawCanvas.addEventListener('touchend',   e => { e.preventDefault(); onUp(toMouse(e)); },   { passive: false });
-    _drawCanvas.addEventListener('click', onClick);
-    document.addEventListener('keydown', onKey);
+  function _bindCanvasEvents() {
+    _drawCanvas.addEventListener('mousedown',  _onDown);
+    _drawCanvas.addEventListener('mousemove',  _onMove);
+    _drawCanvas.addEventListener('mouseup',    _onUp);
+    _drawCanvas.addEventListener('touchstart', e => { e.preventDefault(); _onDown(_toMouse(e)); }, { passive: false });
+    _drawCanvas.addEventListener('touchmove',  e => { e.preventDefault(); _onMove(_toMouse(e)); }, { passive: false });
+    _drawCanvas.addEventListener('touchend',   e => { e.preventDefault(); _onUp(_toMouse(e));   }, { passive: false });
+    _drawCanvas.addEventListener('click', _onClick);
+    document.addEventListener('keydown', _onKey);
   }
 
-  function onKey(e) {
-    const screen = document.getElementById('markup-screen');
-    if (screen.classList.contains('hidden')) return;
+  function _onKey(e) {
+    if (document.getElementById('markup-screen')?.classList.contains('hidden')) return;
     if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
   }
 
-  function toMouse(e) {
+  function _toMouse(e) {
     const t = e.touches[0] || e.changedTouches[0];
     return { clientX: t.clientX, clientY: t.clientY };
   }
 
-  function getPos(e) {
+  function _getPos(e) {
     const rect = _drawCanvas.getBoundingClientRect();
     return {
       x: (e.clientX - rect.left) * (_drawCanvas.width  / rect.width),
@@ -194,13 +272,12 @@ const PdfMarkup = (() => {
   let _arrowStart = null;
   let _preArrowSnapshot = null;
 
-  function onDown(e) {
+  function _onDown(e) {
     if (_tool === 'text' || _tool === 'pin') return;
     _drawing = true;
-    const pos = getPos(e);
+    const pos = _getPos(e);
     _startX = pos.x;
     _startY = pos.y;
-
     if (_tool === 'pen' || _tool === 'marker') {
       _ctx.beginPath();
       _ctx.moveTo(pos.x, pos.y);
@@ -213,9 +290,9 @@ const PdfMarkup = (() => {
     }
   }
 
-  function onMove(e) {
+  function _onMove(e) {
     if (!_drawing) return;
-    const pos = getPos(e);
+    const pos = _getPos(e);
     _ctx.lineCap  = 'round';
     _ctx.lineJoin = 'round';
     _ctx.strokeStyle = _color;
@@ -235,47 +312,43 @@ const PdfMarkup = (() => {
       _ctx.beginPath();
       _ctx.moveTo(pos.x, pos.y);
     } else if (_tool === 'arrow' && _arrowStart) {
-      // Redraw from pre-arrow snapshot then draw arrow preview
       const img = new Image();
       img.src = _preArrowSnapshot;
       _ctx.clearRect(0, 0, _drawCanvas.width, _drawCanvas.height);
       _ctx.globalAlpha = 1;
       _ctx.drawImage(img, 0, 0);
-      drawArrow(_ctx, _arrowStart.x, _arrowStart.y, pos.x, pos.y);
+      _drawArrow(_ctx, _arrowStart.x, _arrowStart.y, pos.x, pos.y);
     }
     _ctx.globalAlpha = 1;
   }
 
-  function onUp(e) {
+  function _onUp() {
     if (!_drawing) return;
     _drawing = false;
     _ctx.globalAlpha = 1;
-    if (_tool === 'pen' || _tool === 'marker' || _tool === 'arrow') {
-      pushState();
-    }
+    if (_tool === 'pen' || _tool === 'marker' || _tool === 'arrow') _pushState();
     _arrowStart = null;
     _preArrowSnapshot = null;
   }
 
-  function onClick(e) {
+  function _onClick(e) {
     if (_tool === 'text') {
-      const pos  = getPos(e);
+      const pos  = _getPos(e);
       const text = prompt('הזן טקסט:');
       if (!text) return;
-      _ctx.font      = `bold 18px Heebo,Arial`;
-      _ctx.fillStyle = _color;
-      _ctx.direction = 'rtl';
-      _ctx.globalAlpha = 1;
+      _ctx.font         = 'bold 18px Heebo,Arial';
+      _ctx.fillStyle    = _color;
+      _ctx.direction    = 'rtl';
+      _ctx.globalAlpha  = 1;
       _ctx.fillText(text, pos.x, pos.y);
-      pushState();
+      _pushState();
     } else if (_tool === 'pin') {
-      const pos = getPos(e);
-      showPinPopup(pos.x, pos.y, e);
+      _showPinPopup(_getPos(e), e);
     }
   }
 
   // ── STROKE STATE STACK ───────────────────────────────────────────────────────
-  function pushState() {
+  function _pushState() {
     if (!_pageStates[_pageNum]) _pageStates[_pageNum] = [];
     _pageStates[_pageNum].push(_drawCanvas.toDataURL('image/png'));
   }
@@ -292,8 +365,8 @@ const PdfMarkup = (() => {
     }
   }
 
-  // ── ARROW DRAW ───────────────────────────────────────────────────────────────
-  function drawArrow(ctx, x1, y1, x2, y2) {
+  // ── ARROW ────────────────────────────────────────────────────────────────────
+  function _drawArrow(ctx, x1, y1, x2, y2) {
     const headlen = 16;
     const angle   = Math.atan2(y2 - y1, x2 - x1);
     ctx.lineWidth   = 3;
@@ -313,41 +386,38 @@ const PdfMarkup = (() => {
   }
 
   // ── PINS ─────────────────────────────────────────────────────────────────────
-  function renderPins() {
+  function _renderPins() {
     const container = document.getElementById('markup-pins');
     if (!container) return;
     const pagePins = _pins.filter(p => p.page === _pageNum);
     const cRect    = _drawCanvas.getBoundingClientRect();
     const scaleX   = _drawCanvas.width  / cRect.width;
     const scaleY   = _drawCanvas.height / cRect.height;
-
     container.innerHTML = pagePins.map((pin, i) => {
       const note = _notes.find(n => n.id === pin.noteId);
-      const lx   = pin.x / scaleX;
-      const ty   = pin.y / scaleY;
-      return `<div class="markup-pin" style="left:${lx}px;top:${ty}px;background:${pin.color};"
-        onclick="PdfMarkup.onPinClick(${i},${lx},${ty},event)">
+      return `<div class="markup-pin" style="left:${pin.x/scaleX}px;top:${pin.y/scaleY}px;background:${pin.color};"
+        onclick="PdfMarkup.onPinClick(${i},${pin.x/scaleX},${pin.y/scaleY},event)">
         <span>${note?.noteNumber || '?'}</span>
       </div>`;
     }).join('');
   }
 
-  function showPinPopup(x, y, e) {
+  function _showPinPopup(pos, e) {
     if (_notes.length === 0) { App.toast('הוסף ממצאים תחילה'); return; }
     const popup = document.getElementById('markup-pin-popup');
+    const cRect = _drawCanvas.getBoundingClientRect();
     popup.innerHTML = `
       <h4>📌 שייך לממצא:</h4>
       ${_notes.map(n => `
         <div style="padding:6px 0;border-bottom:1px solid var(--border-light);cursor:pointer;font-size:.82rem;"
-          onclick="PdfMarkup.addPin(${x},${y},'${n.id}')">
+          onclick="PdfMarkup.addPin(${pos.x},${pos.y},'${n.id}')">
           <strong>ממצא ${n.noteNumber}</strong> — ${n.description.slice(0,60)}
         </div>
       `).join('')}
       <button class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="PdfMarkup.closePinPopup()">ביטול</button>
     `;
-    const cRect = _drawCanvas.getBoundingClientRect();
-    popup.style.right = Math.min(x / (_drawCanvas.width / cRect.width) + 10, cRect.width - 240) + 'px';
-    popup.style.top   = Math.max(y / (_drawCanvas.height / cRect.height) - 10, 0) + 'px';
+    popup.style.right = Math.min(pos.x / (_drawCanvas.width  / cRect.width)  + 10, cRect.width  - 240) + 'px';
+    popup.style.top   = Math.max(pos.y / (_drawCanvas.height / cRect.height) - 10, 0) + 'px';
     popup.classList.remove('hidden');
   }
 
@@ -358,15 +428,14 @@ const PdfMarkup = (() => {
   function addPin(x, y, noteId) {
     closePinPopup();
     _pins.push({ x, y, noteId, color: _color, page: _pageNum });
-    renderPins();
-    // Draw a small pin mark on draw canvas
+    _renderPins();
     _ctx.beginPath();
     _ctx.arc(x, y, 10, 0, Math.PI * 2);
-    _ctx.fillStyle = _color;
+    _ctx.fillStyle   = _color;
     _ctx.globalAlpha = 0.7;
     _ctx.fill();
     _ctx.globalAlpha = 1;
-    pushState();
+    _pushState();
   }
 
   function onPinClick(idx, lx, ty) {
@@ -374,7 +443,7 @@ const PdfMarkup = (() => {
     const pin      = pagePins[idx];
     const note     = _notes.find(n => n.id === pin?.noteId);
     if (!note) return;
-    const popup    = document.getElementById('markup-pin-popup');
+    const popup = document.getElementById('markup-pin-popup');
     popup.innerHTML = `
       <h4>📌 ממצא ${note.noteNumber}</h4>
       <p style="font-size:.82rem;color:var(--text-muted);margin-bottom:8px;">${note.description.slice(0,100)}</p>
@@ -388,11 +457,11 @@ const PdfMarkup = (() => {
 
   function removePin(idx) {
     const pagePins = _pins.filter(p => p.page === _pageNum);
-    const pin      = pagePins[idx];
-    const gi       = _pins.indexOf(pin);
+    const pin = pagePins[idx];
+    const gi  = _pins.indexOf(pin);
     if (gi >= 0) _pins.splice(gi, 1);
     closePinPopup();
-    renderPins();
+    _renderPins();
   }
 
   // ── CONTROLS ─────────────────────────────────────────────────────────────────
@@ -414,27 +483,25 @@ const PdfMarkup = (() => {
   async function prevPage() {
     if (_pageNum <= 1) return;
     _pageNum--;
-    await renderPage(_pageNum);
+    await _renderPage(_pageNum);
   }
 
   async function nextPage() {
     if (_pageNum >= _totalPages) return;
     _pageNum++;
-    await renderPage(_pageNum);
+    await _renderPage(_pageNum);
   }
 
-  // ── SAVE — render composite to base64 and call callback ─────────────────────
+  // ── SAVE ─────────────────────────────────────────────────────────────────────
   async function save() {
     App.showLoading('שומר...');
     try {
-      // Compose: PDF page + draw layer
       const composite = document.createElement('canvas');
       composite.width  = _pdfCanvas.width;
       composite.height = _pdfCanvas.height;
       const cctx = composite.getContext('2d');
       cctx.drawImage(_pdfCanvas, 0, 0);
       cctx.drawImage(_drawCanvas, 0, 0);
-
       const imageData = composite.toDataURL('image/jpeg', 0.88);
       if (_onSaveCallback) _onSaveCallback(imageData, _planId, _planName);
       close();
@@ -447,25 +514,20 @@ const PdfMarkup = (() => {
   }
 
   function close() {
-    document.removeEventListener('keydown', onKey);
+    document.removeEventListener('keydown', _onKey);
     const screen = document.getElementById('markup-screen');
     screen.classList.add('hidden');
     screen.innerHTML = '';
-    _pdfDoc = null;
+    _pdfDoc    = null;
+    _planPages = null;
     _onSaveCallback = null;
-    // יציאה מ-Fullscreen ו-Landscape
     if (document.exitFullscreen && document.fullscreenElement) {
       document.exitFullscreen().catch(() => {});
-    } else if (document.webkitExitFullscreen && document.webkitFullscreenElement) {
-      document.webkitExitFullscreen();
-    }
-    if (window.screen?.orientation?.unlock) {
-      window.screen.orientation.unlock();
     }
   }
 
   return {
-    openForNote, close, save, undo,
+    openForNote, openForImage, close, save, undo,
     setTool, setColor,
     prevPage, nextPage,
     addPin, removePin, onPinClick, closePinPopup,
