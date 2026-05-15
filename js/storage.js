@@ -1,161 +1,199 @@
 const Storage = (() => {
-  const K = {
-    people:   'dit_people',
-    projects: 'dit_projects',
-    reports:  'dit_reports',
-    notes:    'dit_notes',
-    plans:    'dit_plans',      // project-level plan library
-    settings: 'dit_settings',
-  };
+
+  // ── Mapping helpers ────────────────────────────────────────────────────────
+
+  function mapPerson(r) {
+    if (!r) return null;
+    return { id: r.id, name: r.name, company: r.company || '', email: r.email || '', phone: r.phone || '', logoUrl: r.logo_url || '', createdAt: r.created_at };
+  }
+  function personToRow(p) {
+    return { id: p.id, name: p.name, company: p.company || null, email: p.email || null, phone: p.phone || null, logo_url: p.logoUrl || null, created_at: p.createdAt, created_by: Auth.getUser()?.id };
+  }
+
+  function mapProject(r) {
+    if (!r) return null;
+    return { id: r.id, personId: r.person_id, name: r.name, domain: r.domain || '', logoUrl: r.logo_url || '', createdAt: r.created_at };
+  }
+  function projectToRow(p) {
+    return { id: p.id, person_id: p.personId, name: p.name, domain: p.domain || null, logo_url: p.logoUrl || null, created_at: p.createdAt, created_by: Auth.getUser()?.id };
+  }
+
+  function mapReport(r) {
+    if (!r) return null;
+    return { id: r.id, projectId: r.project_id, reportNumber: r.report_number, siteName: r.site_name || '', description: r.description || '', date: r.date || '', inspector: r.inspector || '', participants: r.participants || '', floors: r.floors || '', summary: r.summary || '', status: r.status || 'draft', createdAt: r.created_at };
+  }
+  function reportToRow(r) {
+    return { id: r.id, project_id: r.projectId, report_number: r.reportNumber, site_name: r.siteName || null, description: r.description || null, date: r.date || null, inspector: r.inspector || null, participants: r.participants || null, floors: r.floors || null, summary: r.summary || null, status: r.status || 'draft', created_at: r.createdAt, created_by: Auth.getUser()?.id };
+  }
+
+  function mapNote(r) {
+    if (!r) return null;
+    return { id: r.id, reportId: r.report_id, floor: r.floor || '', area: r.area || '', description: r.description || '', responsible: r.responsible || '', urgency: r.urgency || 'medium', status: r.status || 'open', mediaItems: r.media_items || [], planMarkups: r.plan_markups || [], createdAt: r.created_at };
+  }
+  function noteToRow(n) {
+    return { id: n.id, report_id: n.reportId, floor: n.floor || null, area: n.area || null, description: n.description || null, responsible: n.responsible || null, urgency: n.urgency || 'medium', status: n.status || 'open', media_items: n.mediaItems || [], plan_markups: n.planMarkups || [], created_at: n.createdAt };
+  }
+
+  function mapPlan(r) {
+    if (!r) return null;
+    return { id: r.id, projectId: r.project_id, name: r.name || '', pdfData: r.pdf_data || '', thumbData: r.thumb_data || '', createdAt: r.created_at };
+  }
+  function planToRow(p) {
+    return { id: p.id, project_id: p.projectId, name: p.name || null, pdf_data: p.pdfData || null, thumb_data: p.thumbData || null, created_at: p.createdAt };
+  }
 
   function generateId() {
     return Date.now().toString(36) + Math.random().toString(36).substr(2, 6);
   }
 
-  async function getList(key)       { return (await localforage.getItem(key)) || []; }
-  async function saveList(key, arr) { await localforage.setItem(key, arr); }
+  function throwIf(error) { if (error) throw error; }
 
-  // ── PEOPLE ──────────────────────────────────────────────────────────────────
+  // ── PEOPLE ────────────────────────────────────────────────────────────────
+
   const People = {
     async getAll() {
-      const list = await getList(K.people);
-      return list.sort((a, b) => a.name.localeCompare(b.name, 'he'));
+      const { data, error } = await _supabase.from('people').select('*').order('name');
+      throwIf(error);
+      return (data || []).map(mapPerson);
     },
     async get(id) {
-      return (await getList(K.people)).find(p => p.id === id) || null;
+      const { data, error } = await _supabase.from('people').select('*').eq('id', id).maybeSingle();
+      throwIf(error);
+      return mapPerson(data);
     },
     async save(person) {
-      const list = await getList(K.people);
-      const idx  = list.findIndex(p => p.id === person.id);
-      if (idx >= 0) list[idx] = person; else list.push(person);
-      await saveList(K.people, list);
-      return person;
+      const { data, error } = await _supabase.from('people').upsert(personToRow(person)).select().single();
+      throwIf(error);
+      return mapPerson(data);
     },
     async delete(id) {
-      const projects = await Projects.getForPerson(id);
-      for (const p of projects) await Projects.delete(p.id);
-      const list = await getList(K.people);
-      await saveList(K.people, list.filter(p => p.id !== id));
+      const { error } = await _supabase.from('people').delete().eq('id', id);
+      throwIf(error);
     }
   };
 
-  // ── PROJECTS ─────────────────────────────────────────────────────────────────
+  // ── PROJECTS ──────────────────────────────────────────────────────────────
+
   const Projects = {
     async getForPerson(personId) {
-      const list = await getList(K.projects);
-      return list
-        .filter(p => p.personId === personId)
-        .sort((a, b) => b.createdAt - a.createdAt);
+      const { data, error } = await _supabase.from('projects').select('*').eq('person_id', personId).order('created_at', { ascending: false });
+      throwIf(error);
+      return (data || []).map(mapProject);
     },
     async get(id) {
-      return (await getList(K.projects)).find(p => p.id === id) || null;
+      const { data, error } = await _supabase.from('projects').select('*').eq('id', id).maybeSingle();
+      throwIf(error);
+      return mapProject(data);
     },
     async save(project) {
-      const list = await getList(K.projects);
-      const idx  = list.findIndex(p => p.id === project.id);
-      if (idx >= 0) list[idx] = project; else list.push(project);
-      await saveList(K.projects, list);
-      return project;
+      const { data, error } = await _supabase.from('projects').upsert(projectToRow(project)).select().single();
+      throwIf(error);
+      return mapProject(data);
     },
     async delete(id) {
-      const reports = await Reports.getForProject(id);
-      for (const r of reports) await Reports.delete(r.id);
-      const plans = await Plans.getForProject(id);
-      for (const pl of plans) await Plans.delete(pl.id);
-      const list = await getList(K.projects);
-      await saveList(K.projects, list.filter(p => p.id !== id));
+      const { error } = await _supabase.from('projects').delete().eq('id', id);
+      throwIf(error);
     }
   };
 
-  // ── REPORTS ──────────────────────────────────────────────────────────────────
+  // ── REPORTS ───────────────────────────────────────────────────────────────
+
   const Reports = {
     async getForProject(projectId) {
-      const list = await getList(K.reports);
-      return list
-        .filter(r => r.projectId === projectId)
-        .sort((a, b) => b.createdAt - a.createdAt);
+      const { data, error } = await _supabase.from('reports').select('*').eq('project_id', projectId).order('created_at', { ascending: false });
+      throwIf(error);
+      return (data || []).map(mapReport);
     },
     async get(id) {
-      return (await getList(K.reports)).find(r => r.id === id) || null;
+      const { data, error } = await _supabase.from('reports').select('*').eq('id', id).maybeSingle();
+      throwIf(error);
+      return mapReport(data);
     },
     async save(report) {
-      const list = await getList(K.reports);
-      const idx  = list.findIndex(r => r.id === report.id);
-      if (idx >= 0) list[idx] = report; else list.push(report);
-      await saveList(K.reports, list);
-      return report;
+      const { data, error } = await _supabase.from('reports').upsert(reportToRow(report)).select().single();
+      throwIf(error);
+      return mapReport(data);
     },
     async delete(id) {
-      const list = await getList(K.reports);
-      await saveList(K.reports, list.filter(r => r.id !== id));
-      const notes = await getList(K.notes);
-      await saveList(K.notes, notes.filter(n => n.reportId !== id));
+      const { error } = await _supabase.from('reports').delete().eq('id', id);
+      throwIf(error);
     },
     async getNextNumber(projectId) {
-      const list = await Reports.getForProject(projectId);
-      const max  = list.reduce((m, r) => Math.max(m, r.reportNumber || 0), 0);
-      return max + 1;
+      const { data } = await _supabase.from('reports').select('report_number').eq('project_id', projectId).order('report_number', { ascending: false }).limit(1);
+      return ((data?.[0]?.report_number) || 0) + 1;
+    },
+    // Viewer: returns all accessible reports with joined project+person names
+    async getPermitted() {
+      const { data, error } = await _supabase
+        .from('reports')
+        .select('*, projects!inner(name, logo_url, people!inner(name))')
+        .order('created_at', { ascending: false });
+      throwIf(error);
+      return (data || []).map(row => ({
+        ...mapReport(row),
+        projectName:    row.projects?.name        || '',
+        projectLogoUrl: row.projects?.logo_url    || '',
+        personName:     row.projects?.people?.name || '',
+      }));
     }
   };
 
-  // ── NOTES ────────────────────────────────────────────────────────────────────
-  // note.mediaItems  = [{ type:'image'|'video', data:base64, name }]
-  // note.planMarkups = [{ planId, planName, imageData:base64 }]  ← annotated image per note
+  // ── NOTES ─────────────────────────────────────────────────────────────────
+
   const Notes = {
     async getForReport(reportId) {
-      const list = await getList(K.notes);
-      return list
-        .filter(n => n.reportId === reportId)
-        .sort((a, b) => a.createdAt - b.createdAt);
+      const { data, error } = await _supabase.from('notes').select('*').eq('report_id', reportId).order('created_at', { ascending: true });
+      throwIf(error);
+      return (data || []).map(mapNote);
     },
     async get(id) {
-      return (await getList(K.notes)).find(n => n.id === id) || null;
+      const { data, error } = await _supabase.from('notes').select('*').eq('id', id).maybeSingle();
+      throwIf(error);
+      return mapNote(data);
     },
     async save(note) {
-      const list = await getList(K.notes);
-      const idx  = list.findIndex(n => n.id === note.id);
-      if (idx >= 0) list[idx] = note; else list.push(note);
-      await saveList(K.notes, list);
-      return note;
+      const { data, error } = await _supabase.from('notes').upsert(noteToRow(note)).select().single();
+      throwIf(error);
+      return mapNote(data);
     },
     async delete(id) {
-      const list = await getList(K.notes);
-      await saveList(K.notes, list.filter(n => n.id !== id));
+      const { error } = await _supabase.from('notes').delete().eq('id', id);
+      throwIf(error);
     }
   };
 
-  // ── PLANS (project-level library) ────────────────────────────────────────────
-  // { id, projectId, name, pdfData(base64), thumbData(base64), createdAt }
+  // ── PLANS ─────────────────────────────────────────────────────────────────
+
   const Plans = {
     async getForProject(projectId) {
-      const list = await getList(K.plans);
-      return list
-        .filter(p => p.projectId === projectId)
-        .sort((a, b) => a.createdAt - b.createdAt);
+      const { data, error } = await _supabase.from('plans').select('*').eq('project_id', projectId).order('created_at', { ascending: true });
+      throwIf(error);
+      return (data || []).map(mapPlan);
     },
     async get(id) {
-      return (await getList(K.plans)).find(p => p.id === id) || null;
+      const { data, error } = await _supabase.from('plans').select('*').eq('id', id).maybeSingle();
+      throwIf(error);
+      return mapPlan(data);
     },
     async save(plan) {
-      const list = await getList(K.plans);
-      const idx  = list.findIndex(p => p.id === plan.id);
-      if (idx >= 0) list[idx] = plan; else list.push(plan);
-      await saveList(K.plans, list);
-      return plan;
+      const { data, error } = await _supabase.from('plans').upsert(planToRow(plan)).select().single();
+      throwIf(error);
+      return mapPlan(data);
     },
     async delete(id) {
-      const list = await getList(K.plans);
-      await saveList(K.plans, list.filter(p => p.id !== id));
+      const { error } = await _supabase.from('plans').delete().eq('id', id);
+      throwIf(error);
     }
   };
 
-  // ── SETTINGS ─────────────────────────────────────────────────────────────────
+  // ── SETTINGS (local only, no need to sync) ────────────────────────────────
+
   const Settings = {
     async get() {
-      return (await localforage.getItem(K.settings)) || {};
+      return (await localforage.getItem('dit_settings')) || {};
     },
     async save(settings) {
-      await localforage.setItem(K.settings, settings);
+      await localforage.setItem('dit_settings', settings);
       return settings;
     }
   };

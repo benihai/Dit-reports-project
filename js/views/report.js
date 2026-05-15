@@ -13,9 +13,12 @@ const ReportView = (() => {
     return `${day}/${m}/${y}`;
   }
 
+  let _readOnly = false;
+
   // ── RENDER ──────────────────────────────────────────────────────────────────
-  async function render({ reportId }) {
+  async function render({ reportId }, { readOnly = false } = {}) {
     _reportId = reportId;
+    _readOnly = readOnly;
 
     const report = await Storage.Reports.get(reportId);
     if (!report) { Router.navigate('/'); return; }
@@ -25,7 +28,7 @@ const ReportView = (() => {
       Storage.Projects.get(report.projectId),
       Storage.Notes.getForReport(reportId),
     ]);
-    const person = await Storage.People.get(project?.personId);
+    const person = project?.personId ? await Storage.People.get(project.personId) : null;
 
     App.setHeader(`דוח #${report.reportNumber}`, true, `
       <button class="btn btn-outline btn-sm" onclick="ReportView.exportPdf()">
@@ -40,30 +43,36 @@ const ReportView = (() => {
     `);
 
     const container = document.getElementById('view-container');
-    container.innerHTML = `
-      <div class="breadcrumb">
-        <span class="breadcrumb-item" onclick="Router.navigate('/')">דף הבית</span>
-        <span class="breadcrumb-sep">›</span>
-        <span class="breadcrumb-item" onclick="Router.navigate('/person/${person?.id || ''}')">${escHtml(person?.name || '')}</span>
-        <span class="breadcrumb-sep">›</span>
-        <span class="breadcrumb-item" onclick="Router.navigate('/project/${project?.id || ''}')">${escHtml(project?.name || '')}</span>
-        <span class="breadcrumb-sep">›</span>
-        <span class="breadcrumb-current">דוח #${report.reportNumber}</span>
-      </div>
-      ${headerSectionHtml(report)}
-      ${notesSectionHtml(notes)}
-    `;
+    const breadcrumb = readOnly
+      ? `<div class="breadcrumb">
+           <span class="breadcrumb-item" onclick="Router.navigate('/')">הדוחות שלי</span>
+           <span class="breadcrumb-sep">›</span>
+           <span class="breadcrumb-current">דוח #${report.reportNumber}</span>
+         </div>`
+      : `<div class="breadcrumb">
+           <span class="breadcrumb-item" onclick="Router.navigate('/')">דף הבית</span>
+           <span class="breadcrumb-sep">›</span>
+           <span class="breadcrumb-item" onclick="Router.navigate('/person/${person?.id || ''}')">${escHtml(person?.name || '')}</span>
+           <span class="breadcrumb-sep">›</span>
+           <span class="breadcrumb-item" onclick="Router.navigate('/project/${project?.id || ''}')">${escHtml(project?.name || '')}</span>
+           <span class="breadcrumb-sep">›</span>
+           <span class="breadcrumb-current">דוח #${report.reportNumber}</span>
+         </div>`;
 
-    attachFab(reportId);
+    container.innerHTML = breadcrumb + headerSectionHtml(report) + notesSectionHtml(notes);
+
+    if (!readOnly) attachFab(reportId);
   }
 
   // ── HEADER SECTION (editable) ────────────────────────────────────────────────
   function headerSectionHtml(report) {
+    const editBtn = _readOnly ? '' :
+      `<button class="btn btn-ghost btn-sm" onclick="ReportView.toggleEditHeader()" id="edit-header-btn">✏️ ערוך</button>`;
     return `
       <div class="form-section" id="report-header-section">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
           <div class="form-section-title" style="margin-bottom:0;">פרטי הדוח</div>
-          <button class="btn btn-ghost btn-sm" onclick="ReportView.toggleEditHeader()" id="edit-header-btn">✏️ ערוך</button>
+          ${editBtn}
         </div>
         <div id="header-view-mode">
           ${headerViewHtml(report)}
@@ -227,6 +236,7 @@ const ReportView = (() => {
       <div class="note-card" onclick="ReportView.editNote('${note.id}')">
         <div class="note-card-header">
           <span class="note-number">ממצא ${note.noteNumber}</span>
+          ${_readOnly ? '' : `
           <div style="display:flex;gap:4px;" onclick="event.stopPropagation()">
             <button class="btn-icon-sm" title="ערוך" onclick="ReportView.editNote('${note.id}')">
               <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -241,7 +251,7 @@ const ReportView = (() => {
                 <path d="M9 6V4h6v2"/>
               </svg>
             </button>
-          </div>
+          </div>`}
         </div>
         ${note.floor || note.area ? `
           <div class="note-location">

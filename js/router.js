@@ -1,5 +1,7 @@
 const Router = (() => {
-  const routes = [];
+  let routes = [];
+
+  function clear() { routes = []; }
 
   function register(pattern, handler) {
     const paramNames = [];
@@ -36,5 +38,5 @@ const Router = (() => {
     dispatch(getCurrent());
   }
 
-  return { register, navigate, init, getCurrent };
+  return { register, navigate, init, getCurrent, clear };
 })();

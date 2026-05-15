@@ -55,6 +55,9 @@
   <!-- HIDDEN PDF RENDER AREA -->
   <div id="pdf-template" style="position:fixed;left:-9999px;top:0;width:794px;background:white;"></div>
 
+  <!-- SUPABASE -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+
   <!-- LIBRARIES -->
   <script src="https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -62,18 +65,26 @@
   <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
+  <!-- CONFIG & SUPABASE CLIENT (load first) -->
+  <script src="js/config.js"></script>
+  <script src="js/supabase-client.js"></script>
+  <script src="js/auth.js"></script>
+
   <!-- APP SCRIPTS (order matters) -->
-  <script src="js/router.js?v=2.0"></script>
-  <script src="js/storage.js?v=2.0"></script>
+  <script src="js/router.js?v=3.0"></script>
+  <script src="js/storage.js?v=3.0"></script>
   <script src="js/logoSearch.js?v=2.0"></script>
   <script src="js/pdfMarkup.js?v=2.0"></script>
   <script src="js/pdfExport.js?v=2.0"></script>
-  <script src="js/views/people.js?v=2.0"></script>
+  <script src="js/views/login.js?v=1.0"></script>
+  <script src="js/views/viewerReports.js?v=1.0"></script>
+  <script src="js/views/admin.js?v=1.0"></script>
+  <script src="js/views/people.js?v=3.0"></script>
   <script src="js/views/projects.js?v=2.0"></script>
   <script src="js/views/newProject.js?v=2.0"></script>
   <script src="js/views/reports.js?v=2.0"></script>
   <script src="js/views/noteModal.js?v=2.0"></script>
-  <script src="js/views/report.js?v=2.0"></script>
-  <script src="js/app.js?v=2.0"></script>
+  <script src="js/views/report.js?v=3.0"></script>
+  <script src="js/app.js?v=3.0"></script>
 </body>
 </html>
