@@ -506,3 +506,5 @@ const PdfExport = (() => {
 
   return { generate, preview, downloadFromPreview };
 })();
+
+window.PdfExport = PdfExport;
