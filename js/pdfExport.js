@@ -1,5 +1,6 @@
 const PdfExport = (() => {
 
+  // ── HELPERS ──────────────────────────────────────────────────────────────────
   function esc(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
@@ -8,6 +9,29 @@ const PdfExport = (() => {
     if (!d) return new Date().toLocaleDateString('he-IL');
     const [y, m, day] = d.split('-');
     return `${day}/${m}/${y}`;
+  }
+
+  // First line of a description → card "title"
+  function shortTitle(text) {
+    if (!text) return '—';
+    const first = text.split('\n')[0].trim();
+    return first.length > 90 ? first.slice(0, 87) + '…' : first;
+  }
+
+  // ── INLINE SVG ICONS ─────────────────────────────────────────────────────────
+  function icon(name, size = 16, color = '#9A9A9A') {
+    const d = {
+      calendar: `<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>`,
+      user:     `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>`,
+      users:    `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`,
+      map:      `<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>`,
+      tag:      `<path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>`,
+      check:    `<polyline points="20 6 9 17 4 12"/>`,
+      camera:   `<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>`,
+    };
+    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none"
+      stroke="${color}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"
+      style="display:inline-block;vertical-align:middle;flex-shrink:0;">${d[name]||''}</svg>`;
   }
 
   // ── QR CODE ──────────────────────────────────────────────────────────────────
@@ -21,13 +45,9 @@ const PdfExport = (() => {
         setTimeout(() => {
           const img = div.querySelector('img') || div.querySelector('canvas');
           const src = img?.src || (img?.toDataURL?.() ?? '');
-          div.remove();
-          resolve(src);
+          div.remove(); resolve(src);
         }, 200);
-      } catch {
-        div.remove();
-        resolve('');
-      }
+      } catch { div.remove(); resolve(''); }
     });
   }
 
@@ -35,143 +55,146 @@ const PdfExport = (() => {
   function waitForImages(container) {
     const imgs = Array.from(container.querySelectorAll('img'));
     return Promise.all(imgs.map(img =>
-      img.complete
-        ? Promise.resolve()
+      img.complete ? Promise.resolve()
         : new Promise(res => { img.onload = res; img.onerror = res; })
     ));
   }
 
-  // ── INLINE SVG ICONS ─────────────────────────────────────────────────────────
-  function svgIcon(name, size = 16, color = '#9A9A9A') {
-    const paths = {
-      calendar: `<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>`,
-      user:     `<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>`,
-      users:    `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`,
-      map:      `<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>`,
-      tag:      `<path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>`,
-      check:    `<polyline points="20 6 9 17 4 12"/>`,
-      camera:   `<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>`,
-    };
-    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;flex-shrink:0;">${paths[name] || ''}</svg>`;
-  }
-
-  // ── REPORT HEADER ─────────────────────────────────────────────────────────────
-  function reportHeaderHtml(ditLogoSrc, clientLogoSrc, clientName, report) {
+  // ─────────────────────────────────────────────────────────────────────────────
+  // REPORT HEADER
+  // 3-column: [DIT logo] | [centered title] | [client logo slot]
+  // ─────────────────────────────────────────────────────────────────────────────
+  function reportHeaderHtml(clientLogoSrc, clientName, report) {
     const clientSlot = clientLogoSrc
       ? `<img src="${clientLogoSrc}" alt="${esc(clientName)}"
-           style="height:56px;max-width:130px;object-fit:contain;display:block;">`
-      : clientName
-        ? `<div style="width:130px;min-height:56px;border:1.5px dashed #BFBFBF;border-radius:6px;
+           style="height:60px;width:auto;max-width:140px;object-fit:contain;display:block;">`
+      : `<div style="width:130px;height:68px;
+              border:1.5px dashed #BFBFBF;border-radius:6px;
               background:repeating-linear-gradient(135deg,#FAFAF8 0 8px,#F2F2EF 8px 16px);
               display:flex;align-items:center;justify-content:center;
-              font-size:11px;color:#9A9A9A;text-align:center;padding:6px;box-sizing:border-box;">
-            ${esc(clientName)}
-          </div>`
-        : '';
+              font-size:10px;color:#9A9A9A;letter-spacing:.04em;
+              text-align:center;line-height:1.3;padding:4px;box-sizing:border-box;">
+           ${esc(clientName || 'לוגו פרויקט / לקוח')}
+         </div>`;
 
     return `
       <header style="background:#fff;border-bottom:2px solid #1A1A1A;">
         <div style="height:3px;background:#8CC63F;"></div>
         <div style="display:grid;grid-template-columns:1fr 2fr 1fr;align-items:center;
-                    gap:18px;padding:20px 28px;max-width:794px;margin:0 auto;
-                    box-sizing:border-box;">
+                    gap:18px;padding:22px 28px;max-width:794px;
+                    margin:0 auto;box-sizing:border-box;">
+
+          <!-- DIT logo — right in RTL -->
           <div style="display:flex;justify-content:flex-start;">
-            <div style="background:#1A1A1A;border-radius:6px;padding:6px 10px;display:inline-flex;">
-              <img src="${ditLogoSrc}" style="height:48px;width:auto;" alt="DIT">
-            </div>
+            <img src="icons/dit-logo.png" alt="DIT — Design It Right"
+                 style="height:64px;width:auto;display:block;">
           </div>
+
+          <!-- Centered title -->
           <div style="text-align:center;">
-            <div style="font-family:'Heebo',Arial,sans-serif;font-weight:800;font-size:22px;
-                        color:#1A1A1A;line-height:1.15;">דוח סיור פיקוח</div>
-            <div style="font-family:Arial,sans-serif;font-size:12px;color:#6B6B6B;margin-top:4px;">
+            <div style="font-family:'Heebo',Arial,sans-serif;font-weight:800;
+                        font-size:24px;color:#1A1A1A;line-height:1.15;">
+              דוח סיור פיקוח עליון
+            </div>
+            <div style="font-family:Arial,sans-serif;font-size:13px;
+                        color:#6B6B6B;margin-top:4px;">
               DIT — Design It Right · ניהול ופיקוח בנייה
             </div>
             <div style="font-family:monospace;font-size:11px;color:#6B6B6B;
                         letter-spacing:.06em;margin-top:6px;">
-              REP-${report.reportNumber} · ${formatDate(report.date)}
+              REP-${String(report.reportNumber).padStart(4,'0')} · ${formatDate(report.date)}
             </div>
           </div>
+
+          <!-- Client logo — left in RTL -->
           <div style="display:flex;justify-content:flex-end;">
             ${clientSlot}
           </div>
         </div>
-      </header>
-    `;
+      </header>`;
   }
 
-  // ── META SECTION ─────────────────────────────────────────────────────────────
-  function metaSectionHtml(report, project) {
+  // ─────────────────────────────────────────────────────────────────────────────
+  // METADATA BLOCK  — 2-column grid with icon + label + value
+  // ─────────────────────────────────────────────────────────────────────────────
+  function metadataBlockHtml(report, project) {
     const locationVal = [report.siteName, report.floors].filter(Boolean).join(' · ') || '—';
     const items = [
-      { icon: 'tag',      label: 'שם הפרויקט',     value: project?.name || '—' },
-      { icon: 'map',      label: 'מיקום / אתר',    value: locationVal },
-      { icon: 'calendar', label: 'תאריך הסיור',    value: formatDate(report.date) || '—' },
-      { icon: 'user',     label: 'מפקח מטעם DIT',  value: report.inspector || '—' },
-      { icon: 'users',    label: 'משתתפים נוספים', value: report.participants || '—' },
-      { icon: 'check',    label: 'מטרת הסיור',     value: report.description || '—' },
+      { ic:'tag',      k:'שם הפרויקט',     v: project?.name  || '—' },
+      { ic:'map',      k:'מיקום / אתר',    v: locationVal },
+      { ic:'calendar', k:'תאריך הסיור',    v: formatDate(report.date) || '—' },
+      { ic:'user',     k:'מפקח מטעם DIT',  v: report.inspector  || '—' },
+      { ic:'users',    k:'משתתפים נוספים', v: report.participants || '—' },
+      { ic:'check',    k:'מטרת הסיור',     v: report.description || '—' },
     ];
 
     const cells = items.map(it => `
       <div style="display:flex;gap:10px;align-items:flex-start;">
-        <span style="margin-top:2px;">${svgIcon(it.icon, 16, '#9A9A9A')}</span>
-        <div>
-          <div style="font-size:10px;color:#6B6B6B;font-weight:600;letter-spacing:.06em;
-                      text-transform:uppercase;margin-bottom:2px;">${it.label}</div>
-          <div style="font-size:14px;color:#1A1A1A;font-weight:600;line-height:1.4;">${esc(it.value)}</div>
+        <span style="margin-top:2px;">${icon(it.ic, 16, '#9A9A9A')}</span>
+        <div style="min-width:0;">
+          <div style="font-size:11px;color:#6B6B6B;font-weight:600;
+                      letter-spacing:.06em;text-transform:uppercase;
+                      margin-bottom:2px;">${it.k}</div>
+          <div style="font-size:15px;color:#1A1A1A;font-weight:600;line-height:1.4;">
+            ${esc(it.v)}
+          </div>
         </div>
-      </div>
-    `).join('');
+      </div>`).join('');
 
     return `
-      <section style="max-width:794px;margin:0 auto;padding:22px 28px 18px;
-                      border-bottom:1px solid #E6E6E2;">
-        <div style="font-family:'Heebo',Arial,sans-serif;font-weight:800;font-size:11px;
-                    letter-spacing:.12em;text-transform:uppercase;color:#6FA82B;
-                    margin-bottom:16px;">פרטי הסיור</div>
+      <section style="max-width:794px;margin:0 auto;
+                      padding:22px 28px 16px;border-bottom:1px solid #E6E6E2;">
+        <h2 style="margin:0 0 14px;font-family:'Heebo',Arial,sans-serif;
+                   font-weight:800;font-size:14px;letter-spacing:.12em;
+                   text-transform:uppercase;color:#6FA82B;">פרטי הסיור</h2>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 32px;">
           ${cells}
         </div>
-      </section>
-    `;
+      </section>`;
   }
 
-  // ── SINGLE FINDING CARD ───────────────────────────────────────────────────────
-  async function noteCardHtml(note, index) {
-    const num = String(index).padStart(2, '0');
-    const locationStr = [note.floor, note.area].filter(Boolean).join(' / ');
+  // ─────────────────────────────────────────────────────────────────────────────
+  // SINGLE FINDING CARD  (async — handles video QR codes)
+  // ─────────────────────────────────────────────────────────────────────────────
+  async function findingCardHtml(note, index) {
+    const num      = String(index).padStart(2, '0');
+    const title    = shortTitle(note.description);
+    const location = [note.floor, note.area].filter(Boolean).join(' / ');
 
+    // ── media ──
     const images     = (note.mediaItems || []).filter(m => m.type === 'image');
     const firstPhoto = images[0] || null;
-    const extraPhotos = images.slice(1);
+    const extraImgs  = images.slice(1);
 
     const photoHtml = firstPhoto ? `
       <figure style="margin:0;">
         <div style="height:160px;border-radius:4px;border:1px solid #D1D1CC;overflow:hidden;">
-          <img src="${firstPhoto.data}" style="width:100%;height:100%;object-fit:cover;display:block;">
+          <img src="${firstPhoto.data}"
+               style="width:100%;height:100%;object-fit:cover;display:block;">
         </div>
-        ${locationStr ? `<figcaption style="font-size:11px;color:#6B6B6B;margin-top:6px;
-          display:flex;align-items:center;gap:4px;">
-          ${svgIcon('camera', 12, '#9A9A9A')} ${esc(locationStr)}
-        </figcaption>` : ''}
-      </figure>
-    ` : '';
+        <figcaption style="font-size:11px;color:#6B6B6B;margin-top:6px;
+                           display:flex;align-items:center;gap:6px;">
+          ${icon('camera', 12, '#9A9A9A')}
+          ${esc(location || 'תמונת שטח')}
+        </figcaption>
+      </figure>` : '';
 
-    const extraPhotosHtml = extraPhotos.length ? `
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;padding-top:10px;
-                  border-top:1px solid #E6E6E2;">
-        ${extraPhotos.map(m => `
-          <div style="width:160px;height:120px;border-radius:4px;border:1px solid #D1D1CC;
-                      overflow:hidden;flex-shrink:0;">
+    const extraHtml = extraImgs.length ? `
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;
+                  padding-top:10px;border-top:1px solid #E6E6E2;">
+        ${extraImgs.map(m => `
+          <div style="width:155px;height:115px;border-radius:4px;
+                      border:1px solid #D1D1CC;overflow:hidden;flex-shrink:0;">
             <img src="${m.data}" style="width:100%;height:100%;object-fit:cover;display:block;">
-          </div>
-        `).join('')}
-      </div>
-    ` : '';
+          </div>`).join('')}
+      </div>` : '';
 
-    const planMarkupsHtml = (note.planMarkups || []).length ? `
+    // ── plan markups ──
+    const markupsHtml = (note.planMarkups || []).length ? `
       <div style="margin-top:10px;padding-top:10px;border-top:1px solid #E6E6E2;">
-        <div style="font-size:10px;color:#6B6B6B;font-weight:600;letter-spacing:.06em;
-                    text-transform:uppercase;margin-bottom:8px;">תוכניות מסומנות</div>
+        <div style="font-size:10px;color:#6B6B6B;font-weight:600;
+                    letter-spacing:.06em;text-transform:uppercase;
+                    margin-bottom:8px;">תוכניות מסומנות</div>
         <div style="display:flex;flex-wrap:wrap;gap:10px;">
           ${note.planMarkups.map(pm => `
             <div>
@@ -181,140 +204,187 @@ const PdfExport = (() => {
               <div style="font-size:10px;color:#6B6B6B;text-align:center;margin-top:3px;">
                 ${esc(pm.planName)}
               </div>
-            </div>
-          `).join('')}
+            </div>`).join('')}
         </div>
-      </div>
-    ` : '';
+      </div>` : '';
 
+    // ── video QR codes ──
     const videos = (note.mediaItems || []).filter(m => m.type === 'video');
-    let videoQrHtml = '';
+    let videoHtml = '';
     if (videos.length) {
-      const qrItems = [];
+      const items = [];
       for (const v of videos) {
         const qr = await makeQrDataUrl(v.name || 'video');
-        qrItems.push({ name: v.name, qr });
+        items.push({ name: v.name, qr });
       }
-      videoQrHtml = `
+      videoHtml = `
         <div style="margin-top:10px;padding-top:10px;border-top:1px solid #E6E6E2;
                     display:flex;flex-wrap:wrap;gap:8px;">
-          ${qrItems.map(qi => `
+          ${items.map(qi => `
             <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;
                         border:1px solid #D1D1CC;border-radius:6px;">
               ${qi.qr ? `<img src="${qi.qr}" style="width:56px;height:56px;">` : ''}
               <div>
                 <div style="font-size:10px;color:#6B6B6B;font-weight:600;">סרטון</div>
-                <div style="font-size:13px;font-weight:700;color:#1A1A1A;">${esc(qi.name || 'וידאו')}</div>
+                <div style="font-size:13px;font-weight:700;color:#1A1A1A;">${esc(qi.name||'וידאו')}</div>
                 <div style="font-size:10px;color:#9A9A9A;">סרוק QR לצפייה</div>
               </div>
-            </div>
-          `).join('')}
-        </div>
-      `;
+            </div>`).join('')}
+        </div>`;
     }
 
-    const hasExtraMedia = extraPhotosHtml || planMarkupsHtml || videoQrHtml;
+    const hasExtra = extraHtml || markupsHtml || videoHtml;
 
+    // ── footer items ──
     const footerParts = [];
-    if (note.responsible) footerParts.push(`<span>באחריות: <b style="color:#1A1A1A;">${esc(note.responsible)}</b></span>`);
-    if (locationStr)       footerParts.push(`<span>${esc(locationStr)}</span>`);
+    if (note.responsible)
+      footerParts.push(`<span>באחריות: <b style="color:#1A1A1A;">${esc(note.responsible)}</b></span>`);
+    const ref = `FIND-${String(_currentReport?.reportNumber||0).padStart(3,'0')}-${num}`;
+    footerParts.push(`<span style="font-family:monospace;font-size:11px;">${ref}</span>`);
 
     return `
       <article style="background:#fff;border:1px solid #E6E6E2;border-radius:8px;
                       box-shadow:0 1px 2px rgba(26,26,26,.06);overflow:hidden;
-                      margin-bottom:20px;page-break-inside:avoid;">
+                      margin-bottom:24px;page-break-inside:avoid;">
+
+        <!-- Card head -->
         <div style="display:flex;align-items:center;gap:14px;
                     padding:14px 18px;border-bottom:1px solid #E6E6E2;">
           <span style="font-family:monospace;font-size:11px;font-weight:700;
                        background:#1A1A1A;color:#fff;padding:4px 12px;
-                       border-radius:999px;letter-spacing:.04em;white-space:nowrap;
-                       flex-shrink:0;">ממצא ${num}</span>
-          <div style="flex:1;font-family:'Heebo',Arial,sans-serif;font-weight:700;
-                      font-size:15px;color:#1A1A1A;line-height:1.3;">
-            ${locationStr
-              ? `<span style="display:inline;font-size:13px;color:#6B6B6B;font-weight:500;
-                   margin-inline-end:6px;">${esc(locationStr)} —</span>`
-              : ''}
-            ${esc(note.description).split('\n')[0] || ''}
-          </div>
+                       border-radius:999px;letter-spacing:.04em;
+                       white-space:nowrap;flex-shrink:0;">ממצא ${num}</span>
+          <h3 style="margin:0;font-family:'Heebo',Arial,sans-serif;font-weight:700;
+                     font-size:18px;color:#1A1A1A;flex:1;line-height:1.3;">
+            ${esc(title)}
+          </h3>
         </div>
 
-        <div style="display:grid;grid-template-columns:${firstPhoto ? '1.5fr 1fr' : '1fr'};
+        <!-- Card body: description + first photo -->
+        <div style="display:grid;
+                    grid-template-columns:${firstPhoto ? '1.5fr 1fr' : '1fr'};
                     gap:18px;padding:16px 18px;">
-          <div style="font-size:14px;color:#3A3A3A;line-height:1.65;white-space:pre-wrap;">
+          <div style="font-family:'Heebo',Arial,sans-serif;font-size:14px;
+                      color:#3A3A3A;line-height:1.65;white-space:pre-wrap;">
             ${esc(note.description)}
           </div>
           ${photoHtml}
         </div>
 
-        ${hasExtraMedia ? `
-          <div style="padding:0 18px 16px;">${extraPhotosHtml}${planMarkupsHtml}${videoQrHtml}</div>
-        ` : ''}
+        ${hasExtra ? `<div style="padding:0 18px 14px;">${extraHtml}${markupsHtml}${videoHtml}</div>` : ''}
 
-        ${footerParts.length ? `
-          <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;
-                      padding:12px 18px;background:#FAFAF8;border-top:1px solid #E6E6E2;
-                      font-size:13px;color:#6B6B6B;">
-            ${footerParts.join(`<span style="color:#D1D1CC;">·</span>`)}
-          </div>
-        ` : ''}
-      </article>
-    `;
+        <!-- Card footer -->
+        <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;
+                    padding:12px 18px;background:#FAFAF8;
+                    border-top:1px solid #E6E6E2;
+                    font-family:Arial,sans-serif;font-size:13px;color:#6B6B6B;">
+          ${footerParts.join(`<span style="color:#D1D1CC;">·</span>`)}
+        </div>
+      </article>`;
   }
 
-  // ── BUILD FULL HTML ──────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────────
+  // SUMMARY / SIGN-OFF BLOCK
+  // ─────────────────────────────────────────────────────────────────────────────
+  function summaryBlockHtml(report) {
+    if (!report.inspector) return '';
+    return `
+      <section style="max-width:794px;margin:0 auto;padding:24px 28px 32px;
+                      border-top:2px solid #1A1A1A;">
+        <h2 style="margin:0 0 14px;font-family:'Heebo',Arial,sans-serif;
+                   font-weight:800;font-size:14px;letter-spacing:.12em;
+                   text-transform:uppercase;color:#6FA82B;">סיכום והנחיות להמשך</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;
+                    padding:14px 16px;background:#F6FAEC;border-radius:8px;
+                    border:1px solid #BCDE85;">
+          <div style="display:flex;gap:10px;align-items:center;">
+            ${icon('calendar', 16, '#6FA82B')}
+            <div>
+              <div style="font-size:11px;color:#6B6B6B;font-weight:600;
+                          letter-spacing:.06em;text-transform:uppercase;">תאריך הסיור</div>
+              <div style="font-family:'Heebo',Arial,sans-serif;font-weight:700;
+                          font-size:16px;color:#1A1A1A;margin-top:2px;">
+                ${formatDate(report.date)}
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;">
+            ${icon('user', 16, '#6FA82B')}
+            <div>
+              <div style="font-size:11px;color:#6B6B6B;font-weight:600;
+                          letter-spacing:.06em;text-transform:uppercase;">נחתם על ידי</div>
+              <div style="font-family:'Heebo',Arial,sans-serif;font-weight:700;
+                          font-size:16px;color:#1A1A1A;margin-top:2px;">
+                ${esc(report.inspector)}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>`;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // DOCUMENT FOOTER  — dark bar
+  // ─────────────────────────────────────────────────────────────────────────────
+  function docFooterHtml(report, clientName) {
+    return `
+      <footer style="display:flex;justify-content:space-between;align-items:center;
+                     padding:14px 28px;background:#1A1A1A;color:#fff;
+                     font-family:Arial,sans-serif;font-size:12px;">
+        <span>דוח #${report.reportNumber} · ${formatDate(report.date)}</span>
+        <span><span style="color:#8CC63F;font-weight:800;letter-spacing:.04em;">DIT</span> · Design It Right</span>
+        ${clientName ? `<span style="color:rgba(255,255,255,.55);">${esc(clientName)}</span>` : '<span></span>'}
+      </footer>`;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // BUILD FULL HTML  (async)
+  // ─────────────────────────────────────────────────────────────────────────────
+  // We need reportNumber accessible inside findingCardHtml, so keep a module ref
+  let _currentReport = null;
+
   async function buildHtml(report, notes, project) {
-    const ditLogoSrc    = 'icons/logo.svg';
+    _currentReport = report;
     const clientLogoSrc = project?.logoData || '';
     const clientName    = project?.clientName || project?.name || '';
 
-    const header = reportHeaderHtml(ditLogoSrc, clientLogoSrc, clientName, report);
-    const meta   = metaSectionHtml(report, project);
-
+    // findings section
     let findingsHtml;
     if (notes.length > 0) {
       const cards = [];
       for (let i = 0; i < notes.length; i++) {
-        cards.push(await noteCardHtml(notes[i], i + 1));
+        cards.push(await findingCardHtml(notes[i], i + 1));
       }
       findingsHtml = `
         <section style="max-width:794px;margin:0 auto;padding:24px 28px 8px;">
-          <div style="font-family:'Heebo',Arial,sans-serif;font-weight:800;font-size:11px;
-                      letter-spacing:.12em;text-transform:uppercase;color:#6FA82B;
-                      margin-bottom:16px;">ממצאים והערות (${notes.length})</div>
+          <h2 style="margin:0 0 16px;font-family:'Heebo',Arial,sans-serif;
+                     font-weight:800;font-size:14px;letter-spacing:.12em;
+                     text-transform:uppercase;color:#6FA82B;">
+            ממצאים והערות (${notes.length})
+          </h2>
           ${cards.join('')}
-        </section>
-      `;
+        </section>`;
     } else {
       findingsHtml = `
         <section style="max-width:794px;margin:0 auto;padding:24px 28px;">
-          <p style="color:#6B6B6B;font-size:14px;">לא נרשמו ממצאים בסיור זה.</p>
-        </section>
-      `;
+          <p style="font-size:14px;color:#6B6B6B;">לא נרשמו ממצאים בסיור זה.</p>
+        </section>`;
     }
 
-    const docFooter = `
-      <footer style="display:flex;justify-content:space-between;align-items:center;
-                     padding:14px 28px;background:#1A1A1A;color:#fff;
-                     font-family:Arial,sans-serif;font-size:12px;margin-top:8px;">
-        <span>דוח #${report.reportNumber} · ${formatDate(report.date)}</span>
-        <span style="color:#8CC63F;font-weight:800;letter-spacing:.04em;">DIT</span>
-        <span>Design It Right · dit.co.il</span>
-      </footer>
-    `;
-
     return `
-      <div style="font-family:'Heebo',Arial,'Assistant',sans-serif;direction:rtl;
+      <div style="font-family:'Heebo',Arial,sans-serif;direction:rtl;
                   background:#fff;color:#1A1A1A;line-height:1.5;">
-        ${header}
-        ${meta}
+        ${reportHeaderHtml(clientLogoSrc, clientName, report)}
+        ${metadataBlockHtml(report, project)}
         ${findingsHtml}
-        ${docFooter}
-      </div>
-    `;
+        ${summaryBlockHtml(report)}
+        ${docFooterHtml(report, clientName)}
+      </div>`;
   }
 
-  // ── PREVIEW ───────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────────
+  // PREVIEW OVERLAY
+  // ─────────────────────────────────────────────────────────────────────────────
   let _prevReport = null, _prevNotes = null, _prevProject = null;
 
   async function preview(report, notes, project) {
@@ -362,15 +432,14 @@ const PdfExport = (() => {
           </button>
         </div>
       </div>
-      <div style="flex:1;overflow:auto;background:#EFEEEA;padding:20px;
+      <div style="flex:1;overflow:auto;background:#EFEEEA;padding:24px;
         display:flex;flex-direction:column;align-items:center;">
         <div style="background:#fff;width:100%;max-width:880px;
-          border:1px solid #E6E6E2;box-shadow:0 8px 24px rgba(26,26,26,.1);
-          min-height:600px;">
+          border:1px solid #E6E6E2;
+          box-shadow:0 8px 24px rgba(26,26,26,.10);">
           ${html}
         </div>
-      </div>
-    `;
+      </div>`;
 
     document.body.appendChild(overlay);
   }
@@ -389,7 +458,9 @@ const PdfExport = (() => {
     }
   }
 
-  // ── GENERATE PDF ─────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────────
+  // GENERATE PDF  (html2canvas → jsPDF slicing)
+  // ─────────────────────────────────────────────────────────────────────────────
   async function generate(report, notes, project) {
     const html = await buildHtml(report, notes, project);
 
@@ -410,8 +481,7 @@ const PdfExport = (() => {
     const pageW  = pdf.internal.pageSize.getWidth();
     const pageH  = pdf.internal.pageSize.getHeight();
     const ratio  = pageW / canvas.width;
-    let rendered = 0;
-    let page     = 0;
+    let rendered = 0, page = 0;
 
     while (rendered < canvas.height) {
       if (page > 0) pdf.addPage();
@@ -419,7 +489,10 @@ const PdfExport = (() => {
       const slice  = document.createElement('canvas');
       slice.width  = canvas.width;
       slice.height = sliceH;
-      slice.getContext('2d').drawImage(canvas, 0, rendered, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+      slice.getContext('2d').drawImage(
+        canvas, 0, rendered, canvas.width, sliceH,
+        0, 0, canvas.width, sliceH
+      );
       pdf.addImage(slice.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pageW, sliceH * ratio);
       rendered += sliceH;
       page++;
@@ -427,7 +500,7 @@ const PdfExport = (() => {
 
     container.innerHTML = '';
 
-    const fname = `דוח-${report.reportNumber}-${(project?.name || 'DIT').replace(/\s+/g, '-')}.pdf`;
+    const fname = `דוח-${report.reportNumber}-${(project?.name || 'DIT').replace(/\s+/g,'-')}.pdf`;
     pdf.save(fname);
   }
 
