@@ -1,4 +1,18 @@
 const PdfMarkup = (() => {
+  // ── LAZY PDFJS LOADER ────────────────────────────────────────────────────────
+  let _pdfjsLoading = null;
+  function _ensurePdfJs() {
+    if (typeof pdfjsLib !== 'undefined') return Promise.resolve();
+    if (_pdfjsLoading) return _pdfjsLoading;
+    _pdfjsLoading = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js';
+      s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    });
+    return _pdfjsLoading;
+  }
+
   let _planId     = null;
   let _reportId   = null;
   let _pdfDoc     = null;          // pdfjs doc (old format only)
@@ -62,7 +76,7 @@ const PdfMarkup = (() => {
       } else if (plan.pdfData) {
         // Legacy raw-PDF format
         _planPages = null;
-        if (typeof pdfjsLib === 'undefined') throw new Error('PDF library not loaded');
+        await _ensurePdfJs();
         pdfjsLib.GlobalWorkerOptions.workerSrc =
           'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
         const base64 = plan.pdfData.split(',')[1];
@@ -271,6 +285,7 @@ const PdfMarkup = (() => {
 
   let _arrowStart = null;
   let _preArrowSnapshot = null;
+  let _preArrowImg = null;    // cached Image for arrow preview redraws
 
   function _onDown(e) {
     if (_tool === 'text' || _tool === 'pin') return;
@@ -287,6 +302,9 @@ const PdfMarkup = (() => {
     if (_tool === 'arrow') {
       _arrowStart = pos;
       _preArrowSnapshot = _drawCanvas.toDataURL('image/png');
+      // Pre-decode the snapshot once so mousemove can drawImage immediately
+      _preArrowImg = new Image();
+      _preArrowImg.src = _preArrowSnapshot;
     }
   }
 
@@ -311,12 +329,10 @@ const PdfMarkup = (() => {
       _ctx.stroke();
       _ctx.beginPath();
       _ctx.moveTo(pos.x, pos.y);
-    } else if (_tool === 'arrow' && _arrowStart) {
-      const img = new Image();
-      img.src = _preArrowSnapshot;
+    } else if (_tool === 'arrow' && _arrowStart && _preArrowImg?.complete) {
       _ctx.clearRect(0, 0, _drawCanvas.width, _drawCanvas.height);
       _ctx.globalAlpha = 1;
-      _ctx.drawImage(img, 0, 0);
+      _ctx.drawImage(_preArrowImg, 0, 0);
       _drawArrow(_ctx, _arrowStart.x, _arrowStart.y, pos.x, pos.y);
     }
     _ctx.globalAlpha = 1;
@@ -329,6 +345,7 @@ const PdfMarkup = (() => {
     if (_tool === 'pen' || _tool === 'marker' || _tool === 'arrow') _pushState();
     _arrowStart = null;
     _preArrowSnapshot = null;
+    _preArrowImg = null;
   }
 
   function _onClick(e) {

@@ -5,24 +5,24 @@ const Auth = (() => {
   // ── PUBLIC API ──────────────────────────────────────────────────────────────
 
   async function init(onAuthChange) {
-    const { data: { session } } = await _supabase.auth.getSession();
-    if (session?.user) {
-      _currentUser = session.user;
-      await _loadProfile();
-    }
-
-    _supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        _currentUser = session.user;
-        await _loadProfile();
-      } else {
-        _currentUser    = null;
-        _currentProfile = null;
-      }
-      if (typeof onAuthChange === 'function') onAuthChange(event, session);
+    // onAuthStateChange fires INITIAL_SESSION immediately, so no separate getSession() needed.
+    // Calling both would cause a redundant _loadProfile() on every page load.
+    return new Promise(resolve => {
+      _supabase.auth.onAuthStateChange(async (event, session) => {
+        if (session?.user) {
+          _currentUser = session.user;
+          // Load profile on first sign-in or when session is established
+          if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
+            await _loadProfile();
+          }
+        } else {
+          _currentUser    = null;
+          _currentProfile = null;
+        }
+        if (event === 'INITIAL_SESSION') resolve(session);
+        if (typeof onAuthChange === 'function') onAuthChange(event, session);
+      });
     });
-
-    return session;
   }
 
   async function _loadProfile() {

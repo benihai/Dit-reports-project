@@ -71,12 +71,8 @@
   <!-- SUPABASE — local copy, no CDN dependency -->
   <script src="js/vendor/supabase.js"></script>
 
-  <!-- LIBRARIES -->
+  <!-- LIBRARIES: localforage needed on boot; others loaded lazily by PdfExport/PdfMarkup -->
   <script src="https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
   <!-- CONFIG & SUPABASE CLIENT (load first) -->
   <script src="js/config.js?v=4.0"></script>

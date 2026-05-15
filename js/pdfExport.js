@@ -1,5 +1,28 @@
 const PdfExport = (() => {
 
+  // ── LAZY SCRIPT LOADER ───────────────────────────────────────────────────────
+  const _loaded = {};
+  function _loadScript(src) {
+    if (_loaded[src]) return _loaded[src];
+    _loaded[src] = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src; s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    });
+    return _loaded[src];
+  }
+
+  async function _ensureLibs() {
+    await Promise.all([
+      typeof html2canvas !== 'undefined' ? Promise.resolve()
+        : _loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'),
+      typeof window.jspdf !== 'undefined' ? Promise.resolve()
+        : _loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'),
+      typeof QRCode !== 'undefined' ? Promise.resolve()
+        : _loadScript('https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js'),
+    ]);
+  }
+
   // ── HELPERS ──────────────────────────────────────────────────────────────────
   function esc(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -42,11 +65,17 @@ const PdfExport = (() => {
       document.body.appendChild(div);
       try {
         new QRCode(div, { text: text.slice(0, 300), width: 80, height: 80, correctLevel: QRCode.CorrectLevel.M });
-        setTimeout(() => {
-          const img = div.querySelector('img') || div.querySelector('canvas');
-          const src = img?.src || (img?.toDataURL?.() ?? '');
+        const img    = div.querySelector('img');
+        const canvas = div.querySelector('canvas');
+        if (img) {
+          // Wait for real load event instead of arbitrary 200ms delay
+          const done = () => { div.remove(); resolve(img.src || ''); };
+          if (img.complete && img.src) done();
+          else { img.onload = done; img.onerror = () => { div.remove(); resolve(''); }; }
+        } else {
+          const src = canvas?.toDataURL?.() ?? '';
           div.remove(); resolve(src);
-        }, 200);
+        }
       } catch { div.remove(); resolve(''); }
     });
   }
@@ -208,15 +237,14 @@ const PdfExport = (() => {
         </div>
       </div>` : '';
 
-    // ── video QR codes ──
+    // ── video QR codes — generated in parallel ──
     const videos = (note.mediaItems || []).filter(m => m.type === 'video');
     let videoHtml = '';
     if (videos.length) {
-      const items = [];
-      for (const v of videos) {
+      const items = await Promise.all(videos.map(async v => {
         const qr = await makeQrDataUrl(v.name || 'video');
-        items.push({ name: v.name, qr });
-      }
+        return { name: v.name, qr };
+      }));
       videoHtml = `
         <div style="margin-top:10px;padding-top:10px;border-top:1px solid #E6E6E2;
                     display:flex;flex-wrap:wrap;gap:8px;">
@@ -391,16 +419,17 @@ const PdfExport = (() => {
   // ─────────────────────────────────────────────────────────────────────────────
   // PREVIEW OVERLAY
   // ─────────────────────────────────────────────────────────────────────────────
-  let _prevReport = null, _prevNotes = null, _prevProject = null;
+  let _prevReport = null, _prevNotes = null, _prevProject = null, _prevHtml = null;
 
   async function preview(report, notes, project) {
     App.showLoading('מכין תצוגה מקדימה...');
     try {
+      await _ensureLibs();
       _prevReport  = report;
       _prevNotes   = notes;
       _prevProject = project;
-      const html = await buildHtml(report, notes, project);
-      _showPreviewOverlay(report, html);
+      _prevHtml    = await buildHtml(report, notes, project);
+      _showPreviewOverlay(report, _prevHtml);
     } catch (err) {
       App.toast('שגיאה בטעינת תצוגה מקדימה');
       console.error(err);
@@ -454,7 +483,8 @@ const PdfExport = (() => {
     if (!_prevReport) return;
     App.showLoading('מייצר PDF...');
     try {
-      await generate(_prevReport, _prevNotes, _prevProject);
+      // Reuse the already-built HTML — no need to regenerate QR codes etc.
+      await generate(_prevReport, _prevNotes, _prevProject, _prevHtml);
       document.getElementById('pdf-preview-overlay')?.remove();
     } catch (err) {
       App.toast('שגיאה בייצוא PDF');
@@ -467,15 +497,16 @@ const PdfExport = (() => {
   // ─────────────────────────────────────────────────────────────────────────────
   // GENERATE PDF  (html2canvas → jsPDF slicing)
   // ─────────────────────────────────────────────────────────────────────────────
-  async function generate(report, notes, project) {
-    const html = await buildHtml(report, notes, project);
+  async function generate(report, notes, project, prebuiltHtml = null) {
+    await _ensureLibs();
+    const html = prebuiltHtml || await buildHtml(report, notes, project);
 
     const container = document.getElementById('pdf-template');
     container.innerHTML = html;
     await waitForImages(container);
 
     const canvas = await html2canvas(container, {
-      scale:           2,
+      scale:           1.5,   // was 2 (4× pixels); 1.5 reduces processing ~44% at still-sharp quality
       useCORS:         true,
       allowTaint:      true,
       backgroundColor: '#ffffff',

@@ -283,7 +283,7 @@ const NoteModal = (() => {
       responsible: document.getElementById('note-responsible').value.trim(),
       mediaItems:  _mediaItems,
       planMarkups: _planMarkups,
-      createdAt:   _noteId ? (await Storage.Notes.get(_noteId))?.createdAt : Date.now(),
+      createdAt:   _noteId ? (allNotes.find(n => n.id === _noteId)?.createdAt ?? Date.now()) : Date.now(),
     };
 
     await Storage.Notes.save(note);
