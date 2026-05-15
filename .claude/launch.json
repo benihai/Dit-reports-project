@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dit-report",
+      "runtimeExecutable": "powershell.exe",
+      "runtimeArgs": ["-ExecutionPolicy", "Bypass", "-File", ".claude\\serve.ps1", "-Port", "3001"],
+      "port": 3001
+    }
+  ]
+}

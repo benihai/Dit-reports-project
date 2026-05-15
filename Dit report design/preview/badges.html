@@ -1,0 +1,35 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin:0; padding:24px; background:#fff; font-family:var(--font-sans);}
+  .row { display:flex; gap:10px; align-items:center; margin-bottom:14px; flex-wrap:wrap;}
+  .lbl { font-family:var(--font-mono); font-size:11px; color:var(--fg-3); width:74px;}
+  .dot { width:8px; height:8px; border-radius:999px;}
+</style>
+</head>
+<body>
+  <div class="row">
+    <span class="lbl">urgency</span>
+    <span class="dit-badge dit-badge--critical"><span class="dot" style="background:#C8321F"></span>קריטי</span>
+    <span class="dit-badge dit-badge--medium"><span class="dot" style="background:#D88A0C"></span>בינוני</span>
+    <span class="dit-badge dit-badge--low"><span class="dot" style="background:#6FA82B"></span>נמוך</span>
+    <span class="dit-badge dit-badge--info"><span class="dot" style="background:#2A6FB8"></span>לידיעה</span>
+  </div>
+  <div class="row">
+    <span class="lbl">status</span>
+    <span class="dit-badge" style="background:#F2F2EF; color:#3A3A3A;">טיוטה</span>
+    <span class="dit-badge" style="background:#EDF6DC; color:#6FA82B;">אושר</span>
+    <span class="dit-badge" style="background:#FBEFD7; color:#D88A0C;">בהמתנה</span>
+    <span class="dit-badge" style="background:#1A1A1A; color:#fff;">נסגר</span>
+  </div>
+  <div class="row">
+    <span class="lbl">count</span>
+    <span class="dit-badge" style="background:#1A1A1A; color:#fff; padding:3px 9px; font-size:11px;">ממצא 01</span>
+    <span class="dit-badge" style="background:#1A1A1A; color:#fff; padding:3px 9px; font-size:11px;">ממצא 02</span>
+    <span class="dit-badge" style="background:#1A1A1A; color:#fff; padding:3px 9px; font-size:11px;">ממצא 12</span>
+  </div>
+</body>
+</html>

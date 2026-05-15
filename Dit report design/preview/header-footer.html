@@ -1,0 +1,74 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin:0; padding:0; background:#FAFAF8; font-family:var(--font-sans);}
+  .doc { background:#fff; border:1px solid var(--line-1); }
+  .rule { height:3px; background:#8CC63F;}
+  .head {
+    display:grid;
+    grid-template-columns: 1fr 2fr 1fr;
+    align-items:center;
+    gap:18px;
+    padding:18px 22px;
+    border-bottom:2px solid #1A1A1A;
+  }
+  .head .dit { display:flex; justify-content:flex-start; }
+  .head .dit img { height:60px; width:auto; display:block; }
+  .head .title { text-align:center; }
+  .head .title .ttl {
+    font-family:'Heebo',sans-serif; font-weight:800; font-size:22px;
+    color:#1A1A1A; line-height:1.15;
+  }
+  .head .title .sub {
+    font-size:12px; color:#6B6B6B; margin-top:4px;
+    letter-spacing:.02em;
+  }
+  .head .client { display:flex; justify-content:flex-end; }
+  .head .client .slot {
+    width:120px; height:64px;
+    border: 1.5px dashed #BFBFBF;
+    border-radius: 6px;
+    background: repeating-linear-gradient(
+      135deg,
+      #FAFAF8 0 8px,
+      #F2F2EF 8px 16px
+    );
+    display:flex; align-items:center; justify-content:center;
+    font-family: var(--font-mono);
+    font-size: 10px; color: #9A9A9A;
+    letter-spacing: .04em;
+    text-align: center;
+    line-height: 1.3;
+    padding: 4px;
+  }
+  .body { padding:14px 22px; min-height:30px; color:#6B6B6B; font-size:13px;}
+  .foot { display:flex; justify-content:space-between; padding:12px 22px; background:#1A1A1A; color:#fff; font-size:12px;}
+  .foot .grn { color:#8CC63F; font-weight:700;}
+</style>
+</head>
+<body>
+  <div class="doc">
+    <div class="rule"></div>
+    <div class="head">
+      <div class="dit">
+        <img src="../assets/dit-logo.png" alt="DIT">
+      </div>
+      <div class="title">
+        <div class="ttl">דוח סיור פיקוח עליון</div>
+        <div class="sub">מגדלי רמות · מגרש 4071 · קומה 4</div>
+      </div>
+      <div class="client">
+        <div class="slot">לוגו<br>פרויקט / לקוח</div>
+      </div>
+    </div>
+    <div class="body">— תוכן הדוח —</div>
+    <div class="foot">
+      <span>עמ' 1 מתוך 6 · 14.05.2026</span>
+      <span><span class="grn">DIT</span> · Design It Right</span>
+    </div>
+  </div>
+</body>
+</html>

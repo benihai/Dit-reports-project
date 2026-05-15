@@ -1,0 +1,39 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin:0; padding:20px; background:#fff; font-family:var(--font-sans); }
+  .row { display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:14px; }
+  .card { border:1px solid var(--line-1); border-radius:8px; overflow:hidden; }
+  .top { padding:14px; display:flex; align-items:center; gap:10px;}
+  .dot { width:14px; height:14px; border-radius:999px; }
+  .label { font-weight:800; font-size:14px; }
+  .body { padding:10px 14px 14px; border-top:1px solid var(--line-1); background:#fff;}
+  .name { font-family:var(--font-mono); font-size:11px; color:var(--fg-3); }
+  .hex  { font-family:var(--font-mono); font-size:11px; color:var(--fg-3); margin-top:2px;}
+  .badge { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:700; margin-top:8px;}
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="card">
+      <div class="top" style="background:#FBE9E5;"><div class="dot" style="background:#C8321F"></div><div class="label" style="color:#C8321F">קריטי</div></div>
+      <div class="body"><div class="name">--urgency-critical</div><div class="hex">#C8321F</div><span class="badge" style="background:#FBE9E5;color:#C8321F;">critical</span></div>
+    </div>
+    <div class="card">
+      <div class="top" style="background:#FBEFD7;"><div class="dot" style="background:#D88A0C"></div><div class="label" style="color:#D88A0C">בינוני</div></div>
+      <div class="body"><div class="name">--urgency-medium</div><div class="hex">#D88A0C</div><span class="badge" style="background:#FBEFD7;color:#D88A0C;">medium</span></div>
+    </div>
+    <div class="card">
+      <div class="top" style="background:#EDF6DC;"><div class="dot" style="background:#6FA82B"></div><div class="label" style="color:#6FA82B">נמוך</div></div>
+      <div class="body"><div class="name">--urgency-low</div><div class="hex">#6FA82B</div><span class="badge" style="background:#EDF6DC;color:#6FA82B;">low</span></div>
+    </div>
+    <div class="card">
+      <div class="top" style="background:#E4EEF8;"><div class="dot" style="background:#2A6FB8"></div><div class="label" style="color:#2A6FB8">לידיעה</div></div>
+      <div class="body"><div class="name">--status-info</div><div class="hex">#2A6FB8</div><span class="badge" style="background:#E4EEF8;color:#2A6FB8;">info</span></div>
+    </div>
+  </div>
+</body>
+</html>
