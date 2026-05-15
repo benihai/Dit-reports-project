@@ -157,12 +157,15 @@ const App = (() => {
   // ── Boot ───────────────────────────────────────────────────────────────────
 
   async function init() {
-    // Force clear old service workers — prevents stale cache issues
+    // Register service worker for offline support
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(regs => {
-        regs.forEach(r => r.unregister());
-      });
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
     }
+
+    // Online / offline indicator
+    window.addEventListener('offline', () => toast('אין חיבור — עובד במצב לא מקוון'));
+    window.addEventListener('online',  () => toast('החיבור שוחזר ✓'));
+
 
     showLoading('טוען...');
 

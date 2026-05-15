@@ -179,6 +179,23 @@ const NoteModal = (() => {
   }
 
   // ── MEDIA HANDLING ───────────────────────────────────────────────────────────
+  function _compressImage(dataUrl) {
+    return new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 1200;
+        const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width  = Math.round(img.width  * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.72));
+      };
+      img.onerror = () => resolve(dataUrl);  // fallback: keep original
+      img.src = dataUrl;
+    });
+  }
+
   function handleMedia(e, typeHint) {
     const files = Array.from(e.target.files);
     e.target.value = '';
@@ -187,8 +204,10 @@ const NoteModal = (() => {
         ? (file.type.startsWith('video/') ? 'video' : 'image')
         : typeHint;
       const reader = new FileReader();
-      reader.onload = ev => {
-        _mediaItems.push({ type, data: ev.target.result, name: file.name });
+      reader.onload = async ev => {
+        let data = ev.target.result;
+        if (type === 'image') data = await _compressImage(data);
+        _mediaItems.push({ type, data, name: file.name });
         refreshMediaGrid();
       };
       reader.readAsDataURL(file);
@@ -251,7 +270,7 @@ const NoteModal = (() => {
 
     const allNotes  = await Storage.Notes.getForReport(_reportId);
     const noteNumber = _noteId
-      ? (allNotes.find(n => n.id === _noteId)?.noteNumber || allNotes.length)
+      ? (allNotes.findIndex(n => n.id === _noteId) + 1 || allNotes.length)
       : allNotes.length + 1;
 
     const note = {

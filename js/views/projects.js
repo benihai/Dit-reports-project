@@ -28,6 +28,7 @@ const ProjectsView = (() => {
         </div>
         <div class="project-card-actions" onclick="event.stopPropagation()">
           <button class="btn btn-outline btn-sm" onclick="Router.navigate('/project/${project.id}')">דוחות</button>
+          <button class="btn btn-outline btn-sm" onclick="ProjectsView.editProject('${project.id}')">✏️ ערוך</button>
           <button class="btn-icon-sm" title="מחק פרויקט" onclick="ProjectsView.deleteProject('${project.id}')">
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <polyline points="3 6 5 6 21 6"/>
@@ -91,6 +92,109 @@ const ProjectsView = (() => {
     `;
   }
 
+  async function editProject(id) {
+    const project = await Storage.Projects.get(id);
+    if (!project) return;
+
+    let _editLogo = project.logoData || null;
+
+    let overlay = document.getElementById('edit-project-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id        = 'edit-project-overlay';
+      overlay.className = 'modal-overlay';
+      document.body.appendChild(overlay);
+    }
+
+    overlay.innerHTML = `
+      <div class="modal-box" onclick="event.stopPropagation()" style="max-width:420px;">
+        <div class="modal-handle"></div>
+        <div class="modal-title">עריכת פרויקט</div>
+
+        <div class="form-group">
+          <label>שם הפרויקט <span class="required">*</span></label>
+          <input type="text" id="ep-name" value="${escHtml(project.name)}">
+        </div>
+        <div class="form-group">
+          <label>שם החברה / לקוח</label>
+          <input type="text" id="ep-client" value="${escHtml(project.clientName || '')}">
+        </div>
+        <div class="form-group">
+          <label>לוגו</label>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div id="ep-logo-preview" style="width:56px;height:40px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:6px;overflow:hidden;background:#f8f8f8;">
+              ${_editLogo
+                ? `<img src="${_editLogo}" style="max-width:54px;max-height:38px;object-fit:contain;">`
+                : `<span style="color:var(--text-muted);font-size:.7rem;">אין</span>`}
+            </div>
+            <label class="btn btn-outline btn-sm" style="cursor:pointer;">
+              החלף לוגו
+              <input type="file" accept="image/*" style="display:none;" onchange="ProjectsView._onEditLogo(event,'${id}')">
+            </label>
+            ${_editLogo ? `<button class="btn btn-ghost btn-sm" style="color:#dc2626;" onclick="ProjectsView._clearEditLogo('${id}')">הסר</button>` : ''}
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn btn-outline" onclick="document.getElementById('edit-project-overlay').classList.add('hidden')">ביטול</button>
+          <button class="btn btn-primary" onclick="ProjectsView._saveEdit('${id}')">שמור</button>
+        </div>
+      </div>
+    `;
+    overlay.classList.remove('hidden');
+    overlay.onclick = e => { if (e.target === overlay) overlay.classList.add('hidden'); };
+    setTimeout(() => document.getElementById('ep-name')?.focus(), 60);
+  }
+
+  // Called from inline onchange — store logo in a module-level temp var
+  let _pendingLogo = null;
+
+  function _onEditLogo(e, projectId) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      _pendingLogo = ev.target.result;
+      const preview = document.getElementById('ep-logo-preview');
+      if (preview) preview.innerHTML = `<img src="${_pendingLogo}" style="max-width:54px;max-height:38px;object-fit:contain;">`;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function _clearEditLogo(projectId) {
+    _pendingLogo = '';   // empty string = remove logo
+    const preview = document.getElementById('ep-logo-preview');
+    if (preview) preview.innerHTML = `<span style="color:var(--text-muted);font-size:.7rem;">אין</span>`;
+  }
+
+  async function _saveEdit(projectId) {
+    const name   = document.getElementById('ep-name')?.value.trim();
+    const client = document.getElementById('ep-client')?.value.trim();
+    if (!name) { App.toast('נא להזין שם פרויקט'); return; }
+
+    const project = await Storage.Projects.get(projectId);
+    project.name       = name;
+    project.clientName = client || '';
+    if (_pendingLogo !== null) project.logoData = _pendingLogo;
+
+    App.showLoading('שומר...');
+    try {
+      await Storage.Projects.save(project);
+      App.toast('הפרויקט עודכן');
+      document.getElementById('edit-project-overlay')?.classList.add('hidden');
+      _pendingLogo = null;
+      // Refresh the current view
+      const vc = document.getElementById('view-container');
+      const breadcrumbItem = vc?.querySelector('.breadcrumb-current');
+      const personId = project.personId;
+      if (personId) await render({ personId });
+    } catch (err) {
+      App.toast('שגיאה בשמירה: ' + (err.message || err));
+    } finally {
+      App.hideLoading();
+    }
+  }
+
   async function deleteProject(id) {
     const project = await Storage.Projects.get(id);
     App.confirm(`למחוק את "${project?.name}"? כל הדוחות יימחקו.`, async () => {
@@ -101,5 +205,5 @@ const ProjectsView = (() => {
     });
   }
 
-  return { render, deleteProject };
+  return { render, editProject, _onEditLogo, _clearEditLogo, _saveEdit, deleteProject };
 })();

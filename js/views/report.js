@@ -181,7 +181,7 @@ const ReportView = (() => {
         <span class="badge badge-green" id="notes-count-badge">${notes.length}</span>
       </div>
       <div class="notes-container" id="notes-list">
-        ${notes.length === 0 ? emptyNotesHtml() : notes.map(noteCardHtml).join('')}
+        ${notes.length === 0 ? emptyNotesHtml() : notes.map((n, i) => noteCardHtml(n, i + 1)).join('')}
       </div>
     `;
   }
@@ -199,7 +199,7 @@ const ReportView = (() => {
     `;
   }
 
-  function noteCardHtml(note) {
+  function noteCardHtml(note, noteNum) {
     // Media thumbnails (images + videos)
     const mediaHtml = note.mediaItems?.length
       ? `<div class="media-grid" style="margin-top:8px;">
@@ -235,7 +235,7 @@ const ReportView = (() => {
     return `
       <div class="note-card" onclick="ReportView.editNote('${note.id}')">
         <div class="note-card-header">
-          <span class="note-number">ממצא ${note.noteNumber}</span>
+          <span class="note-number">ממצא ${noteNum || note.noteNumber || '?'}</span>
           ${_readOnly ? '' : `
           <div style="display:flex;gap:4px;" onclick="event.stopPropagation()">
             <button class="btn-icon-sm" title="ערוך" onclick="ReportView.editNote('${note.id}')">
@@ -270,7 +270,7 @@ const ReportView = (() => {
     const notes = await Storage.Notes.getForReport(_reportId);
     const list  = document.getElementById('notes-list');
     const badge = document.getElementById('notes-count-badge');
-    if (list)  list.innerHTML    = notes.length === 0 ? emptyNotesHtml() : notes.map(noteCardHtml).join('');
+    if (list)  list.innerHTML    = notes.length === 0 ? emptyNotesHtml() : notes.map((n, i) => noteCardHtml(n, i + 1)).join('');
     if (badge) badge.textContent = notes.length;
   }
 
