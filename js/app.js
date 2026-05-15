@@ -57,20 +57,18 @@ const App = (() => {
     if (_loadingEl) { _loadingEl.remove(); _loadingEl = null; }
   }
 
-  function _showError(msg) {
-    hideLoading();
-    const vc = document.getElementById('view-container');
-    if (vc) vc.innerHTML =
-      `<div style="padding:32px 20px;text-align:center;">
-         <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:24px;display:inline-block;max-width:400px;text-align:right;">
-           <p style="color:#dc2626;font-weight:700;margin-bottom:8px;">שגיאה</p>
-           <p style="color:#7f1d1d;font-size:.9rem;">${msg}</p>
-           <button onclick="location.reload()" style="margin-top:16px;padding:8px 20px;background:#8DC63F;color:white;border:none;border-radius:6px;cursor:pointer;font-size:.9rem;">רענן דף</button>
-         </div>
-       </div>`;
-  }
+  // ── Auth-aware header actions ──────────────────────────────────────────────
 
-  // ── Admin header actions ───────────────────────────────────────────────────
+  function _logoutIconHtml() {
+    return `
+      <button class="btn-icon" onclick="Auth.logout()" title="יציאה" aria-label="יציאה">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16 17 21 12 16 7"/>
+          <line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+      </button>`;
+  }
 
   function _adminHeaderActions() {
     return `
@@ -81,16 +79,10 @@ const App = (() => {
           <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
         </svg>
       </button>
-      <button class="btn-icon" onclick="Auth.logout()" title="יציאה" aria-label="יציאה">
-        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
-          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-          <polyline points="16 17 21 12 16 7"/>
-          <line x1="21" y1="12" x2="9" y2="12"/>
-        </svg>
-      </button>`;
+      ${_logoutIconHtml()}`;
   }
 
-  // ── Routes ─────────────────────────────────────────────────────────────────
+  // ── Route init ─────────────────────────────────────────────────────────────
 
   function _initAdminRoutes() {
     Router.register('/', () => {
@@ -127,24 +119,17 @@ const App = (() => {
     });
   }
 
-  // ── Auth ───────────────────────────────────────────────────────────────────
+  // ── Auth state handler ─────────────────────────────────────────────────────
 
   function _onAuthChange(event, session) {
-    // INITIAL_SESSION fires on page load — treat like SIGNED_IN/SIGNED_OUT
-    if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
-      if (!_appStarted) {
-        _appStarted = true;
-        _startApp();
-      }
-    } else if (event === 'SIGNED_OUT' || (event === 'INITIAL_SESSION' && !session)) {
-      _appStarted = false;
-      hideLoading();
+    if (event === 'SIGNED_IN' && session) {
+      _startApp();
+    } else if (event === 'SIGNED_OUT') {
       LoginView.render();
     }
   }
 
   function _startApp() {
-    hideLoading();
     Router.clear();
     if (Auth.isAdmin()) {
       _initAdminRoutes();
@@ -153,6 +138,37 @@ const App = (() => {
     }
     Router.init();
   }
+
+  // ── Boot ───────────────────────────────────────────────────────────────────
+
+  async function init() {
+    // Show loading while checking auth
+    showLoading('טוען...');
+    try {
+      const session = await Auth.init(_onAuthChange);
+      hideLoading();
+      if (!session) {
+        LoginView.render();
+      } else {
+        _startApp();
+      }
+    } catch (err) {
+      hideLoading();
+      // If Supabase not configured, show config error
+      if (CONFIG.SUPABASE_URL === 'YOUR_SUPABASE_URL') {
+        document.getElementById('view-container').innerHTML = `
+          <div style="padding:32px;text-align:center;color:#dc2626;">
+            <h2 style="margin-bottom:12px;">⚙️ הגדרת Supabase נדרשת</h2>
+            <p>ערוך את הקובץ <code>js/config.js</code> והכנס את פרטי ה-Supabase שלך.</p>
+            <p style="margin-top:8px;font-size:.85rem;color:#666;">ראה את <code>SETUP.md</code> להוראות מפורטות.</p>
+          </div>`;
+      } else {
+        document.getElementById('view-container').innerHTML = `
+          <div style="padding:32px;text-align:center;color:#dc2626;">
+            <p>שגיאה בטעינה: ${err.message || 'נסה לרענן את הדף'}</p>
+          </div>`;
+      }
+    }
 
   // ── Boot ───────────────────────────────────────────────────────────────────
 
