@@ -166,6 +166,7 @@ const App = (() => {
     window.addEventListener('offline', () => toast('אין חיבור — עובד במצב לא מקוון'));
     window.addEventListener('online',  () => toast('החיבור שוחזר ✓'));
 
+
     showLoading('טוען...');
 
     try {
