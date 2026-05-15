@@ -1,13 +1,19 @@
-const CACHE = 'dit-report-v1';
+const CACHE = 'dit-report-v3';
 const ASSETS = [
   './',
   './index.html',
   './css/style.css',
+  './js/config.js',
+  './js/supabase-client.js',
+  './js/auth.js',
   './js/router.js',
   './js/storage.js',
   './js/logoSearch.js',
   './js/pdfMarkup.js',
   './js/pdfExport.js',
+  './js/views/login.js',
+  './js/views/viewerReports.js',
+  './js/views/admin.js',
   './js/views/people.js',
   './js/views/projects.js',
   './js/views/newProject.js',
