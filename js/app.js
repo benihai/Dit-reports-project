@@ -92,38 +92,53 @@ const App = (() => {
 
   // ── Routes ─────────────────────────────────────────────────────────────────
 
+  function _safeRender(fn) {
+    Promise.resolve().then(fn).catch(err => {
+      console.error('Route render error:', err);
+      const vc = document.getElementById('view-container');
+      if (vc) vc.innerHTML =
+        `<div style="padding:32px 20px;text-align:center;">
+           <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:24px;display:inline-block;max-width:400px;text-align:right;">
+             <p style="color:#dc2626;font-weight:700;margin-bottom:8px;">שגיאת טעינה</p>
+             <p style="color:#7f1d1d;font-size:.9rem;">${String(err.message || err)}</p>
+             <button onclick="location.reload()" style="margin-top:16px;padding:8px 20px;background:#8DC63F;color:white;border:none;border-radius:6px;cursor:pointer;">רענן</button>
+           </div>
+         </div>`;
+    });
+  }
+
   function _initAdminRoutes() {
     Router.register('/', () => {
       ReportView.cleanup();
-      PeopleView.render({ headerActionsHtml: _adminHeaderActions() });
+      _safeRender(() => PeopleView.render({ headerActionsHtml: _adminHeaderActions() }));
     });
     Router.register('/person/:personId', (p) => {
       ReportView.cleanup();
-      ProjectsView.render(p);
+      _safeRender(() => ProjectsView.render(p));
     });
     Router.register('/person/:personId/new-project', (p) => {
       ReportView.cleanup();
-      NewProjectView.render(p);
+      _safeRender(() => NewProjectView.render(p));
     });
     Router.register('/project/:projectId', (p) => {
       ReportView.cleanup();
-      ReportsView.render(p);
+      _safeRender(() => ReportsView.render(p));
     });
     Router.register('/report/:reportId', (p) => {
-      ReportView.render(p);
+      _safeRender(() => ReportView.render(p));
     });
     Router.register('/admin', () => {
       ReportView.cleanup();
-      AdminView.render();
+      _safeRender(() => AdminView.render());
     });
   }
 
   function _initViewerRoutes() {
     Router.register('/', () => {
-      ViewerReportsView.render();
+      _safeRender(() => ViewerReportsView.render());
     });
     Router.register('/report/:reportId', (p) => {
-      ReportView.render(p, { readOnly: true });
+      _safeRender(() => ReportView.render(p, { readOnly: true }));
     });
   }
 
@@ -143,8 +158,12 @@ const App = (() => {
     }
   }
 
-  function _startApp() {
+  async function _startApp() {
     hideLoading();
+    // Wait for profile to finish loading (started in auth.js background).
+    // This is non-blocking from the auth event side but ensures we know the
+    // role before registering routes.
+    await Auth.ensureProfile();
     Router.clear();
     if (Auth.isAdmin()) {
       _initAdminRoutes();
@@ -157,9 +176,15 @@ const App = (() => {
   // ── Boot ───────────────────────────────────────────────────────────────────
 
   async function init() {
-    // Register service worker for offline support
+    // Register service worker for offline support.
+    // When a new SW activates (new deployment), reload automatically so the
+    // user always gets fresh code — but only if the app hasn't started yet
+    // (i.e. they're on the loading/login screen, not mid-session).
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js').catch(() => {});
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!_appStarted) window.location.reload();
+      });
     }
 
     // Online / offline indicator
