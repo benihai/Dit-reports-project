@@ -1,0 +1,2 @@
+# Staging deploys are handled by pages.yml
+# (triggers on push to both main and staging branches)
