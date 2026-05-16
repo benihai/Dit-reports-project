@@ -4,25 +4,24 @@ const Auth = (() => {
 
   // ── PUBLIC API ──────────────────────────────────────────────────────────────
 
-  async function init(onAuthChange) {
-    const { data: { session } } = await _supabase.auth.getSession();
-    if (session?.user) {
-      _currentUser = session.user;
-      await _loadProfile();
-    }
-
+  function init(onAuthChange) {
+    // Register listener immediately — Supabase fires INITIAL_SESSION from
+    // localStorage without a network round-trip, so we don't need getSession()
+    // upfront. Removing that blocking call prevents the app from hanging when
+    // the profile query is slow or fails.
     _supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         _currentUser = session.user;
-        await _loadProfile();
+        // Guard: don't reload profile if it's already set for the same user
+        if (!_currentProfile || _currentProfile.id !== _currentUser.id) {
+          try { await _loadProfile(); } catch (_) {}
+        }
       } else {
         _currentUser    = null;
         _currentProfile = null;
       }
       if (typeof onAuthChange === 'function') onAuthChange(event, session);
     });
-
-    return session;
   }
 
   async function _loadProfile() {

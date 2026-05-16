@@ -21,6 +21,8 @@ const Router = (() => {
   }
 
   function dispatch(path) {
+    if (routes.length === 0) return;
+
     const vc = document.getElementById('view-container');
     if (vc) vc.innerHTML = '<div style="padding:40px;text-align:center;color:#aaa;font-size:.9rem;">טוען...</div>';
 
