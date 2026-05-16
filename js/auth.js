@@ -14,7 +14,13 @@ const Auth = (() => {
         _currentUser = session.user;
         // Guard: don't reload profile if it's already set for the same user
         if (!_currentProfile || _currentProfile.id !== _currentUser.id) {
-          try { await _loadProfile(); } catch (_) {}
+          // 5-second timeout prevents a hung Supabase query from blocking the app forever
+          try {
+            await Promise.race([
+              _loadProfile(),
+              new Promise(resolve => setTimeout(resolve, 5000)),
+            ]);
+          } catch (_) {}
         }
       } else {
         _currentUser    = null;

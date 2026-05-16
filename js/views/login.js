@@ -36,11 +36,25 @@ const LoginView = (() => {
     btn.disabled = true;
     btn.textContent = 'מתחבר...';
 
+    let _loginDone = false;
     try {
       await Auth.login(email, password);
       // Show loading overlay while profile loads and app starts
       App.showLoading('טוען...');
+      // Safety net: if _onAuthChange SIGNED_IN never fires within 12 s
+      // (profile query stalled beyond auth.js 5s timeout + margin),
+      // restore the form so the user can try again.
+      setTimeout(() => {
+        if (!_loginDone && document.getElementById('login-submit')) {
+          App.hideLoading();
+          errorEl.textContent = 'שגיאה בהתחברות — נסה שוב';
+          errorEl.classList.remove('hidden');
+          btn.disabled = false;
+          btn.textContent = 'כניסה';
+        }
+      }, 12000);
     } catch (err) {
+      _loginDone = true;
       errorEl.textContent = 'אימייל או סיסמה שגויים';
       errorEl.classList.remove('hidden');
       btn.disabled = false;
