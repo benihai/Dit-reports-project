@@ -42,7 +42,11 @@ const ProjectsView = (() => {
   }
 
   async function render({ personId }) {
-    const person = await Storage.People.get(personId);
+    // Fetch person + projects in parallel to halve the initial wait
+    const [person, projects] = await Promise.all([
+      Storage.People.get(personId),
+      Storage.Projects.getForPerson(personId),
+    ]);
     if (!person) { Router.navigate('/'); return; }
 
     App.setHeader(person.name, true, `
@@ -51,8 +55,8 @@ const ProjectsView = (() => {
       </button>
     `);
 
-    const projects = await Storage.Projects.getForPerson(personId);
-    const counts   = await Promise.all(
+    // Fetch all report counts in parallel
+    const counts = await Promise.all(
       projects.map(p => Storage.Reports.getForProject(p.id).then(l => l.length))
     );
 

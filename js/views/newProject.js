@@ -1,7 +1,7 @@
 const NewProjectView = (() => {
-  let _logoData    = null;
-  let _personId    = null;
-  let _searching   = false;
+  let _logoData      = null;
+  let _personId      = null;
+  let _searching     = false;
   let _debounceTimer = null;
 
   function escHtml(s) {
@@ -38,26 +38,21 @@ const NewProjectView = (() => {
           </div>
 
           <div class="form-group">
-            <label>שם חברת פיקוח <span class="required">*</span></label>
+            <label>שם החברה <span class="required">*</span></label>
             <input type="text" id="proj-client" placeholder="לדוגמה: קבוצת ABC" required
               oninput="NewProjectView.onClientInput(this.value)">
           </div>
         </div>
 
         <div class="form-section">
-          <div class="form-section-title">לוגו חברת פיקוח</div>
+          <div class="form-section-title">לוגו של החברה</div>
 
           <div class="form-group">
-            <label>דומיין לחיפוש לוגו אוטומטי</label>
             <div style="display:flex;gap:8px;align-items:center;">
-              <input type="text" id="proj-domain" placeholder="example.com או example"
-                oninput="NewProjectView.onDomainInput(this.value)"
-                style="flex:1;">
               <button type="button" class="btn btn-outline btn-sm" id="logo-search-btn"
-                onclick="NewProjectView.searchLogo()">חפש לוגו</button>
+                onclick="NewProjectView.searchLogo()">🔍 חפש לוגו לפי שם החברה</button>
             </div>
-
-            <div id="logo-status"></div>
+            <div id="logo-status" style="margin-top:8px;"></div>
           </div>
 
           <div class="form-group">
@@ -96,64 +91,58 @@ const NewProjectView = (() => {
   function onClientInput(val) {
     clearTimeout(_debounceTimer);
     if (val.trim().length >= 3) {
-      _debounceTimer = setTimeout(() => searchLogoByCompany(val), 1200);
+      _debounceTimer = setTimeout(() => _searchLogoSilent(val), 1400);
     }
   }
 
-  function onDomainInput(val) {
-    clearTimeout(_debounceTimer);
-    if (val.trim().length >= 4 && val.includes('.')) {
-      _debounceTimer = setTimeout(() => searchLogo(), 1000);
-    }
-  }
-
-  async function searchLogoByCompany(company) {
-    if (_searching || !company.trim()) return;
+  // Auto-search triggered by typing — silent (no toast on failure)
+  async function _searchLogoSilent(company) {
+    if (_searching || _logoData || !company.trim()) return;
     _searching = true;
     const statusEl = document.getElementById('logo-status');
-    statusEl.innerHTML = `<div class="logo-searching"><span class="spinner"></span>מחפש לוגו...</div>`;
+    if (statusEl) statusEl.innerHTML = `<div class="logo-searching"><span class="spinner"></span>מחפש לוגו...</div>`;
 
     try {
-      const url = await LogoSearch.searchByDomain(company);
+      const url = await LogoSearch.searchByName(company);
       if (url) {
         const data = await LogoSearch.toDataUrl(url);
         setLogo(data);
-        statusEl.innerHTML = '';
+        if (statusEl) statusEl.innerHTML = '';
         App.toast('לוגו נמצא!');
       } else {
-        statusEl.innerHTML = '';
+        if (statusEl) statusEl.innerHTML = '';
       }
-    } catch (err) {
-      statusEl.innerHTML = '';
+    } catch (_) {
+      if (statusEl) statusEl.innerHTML = '';
     } finally {
       _searching = false;
     }
   }
 
+  // Manual search triggered by button click
   async function searchLogo() {
     if (_searching) return;
-    const domain = document.getElementById('proj-domain')?.value.trim();
-    if (!domain) { App.toast('הזן דומיין לחיפוש'); return; }
+    const company = document.getElementById('proj-client')?.value.trim();
+    if (!company) { App.toast('הזן שם חברה תחילה'); return; }
 
     _searching = true;
-    const btn = document.getElementById('logo-search-btn');
+    const btn      = document.getElementById('logo-search-btn');
     const statusEl = document.getElementById('logo-status');
-    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
-    statusEl.innerHTML = `<div class="logo-searching"><span class="spinner"></span>מחפש לוגו...</div>`;
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> מחפש...'; }
+    if (statusEl) statusEl.innerHTML = '';
 
     try {
-      const url = await LogoSearch.searchByDomain(domain);
+      const url = await LogoSearch.searchByName(company);
       if (url) {
         const data = await LogoSearch.toDataUrl(url);
         setLogo(data);
-        statusEl.innerHTML = '';
         App.toast('לוגו נמצא!');
       } else {
-        statusEl.innerHTML = `<p class="text-sm text-muted" style="margin-top:6px;">לא נמצא לוגו — נסה לחיפוש ידני</p>`;
+        App.toast('לא נמצא לוגו — נסה להעלות ידנית');
       }
     } finally {
       _searching = false;
-      if (btn) { btn.disabled = false; btn.textContent = 'חפש לוגו'; }
+      if (btn) { btn.disabled = false; btn.innerHTML = '🔍 חפש לוגו לפי שם החברה'; }
     }
   }
 
@@ -188,24 +177,30 @@ const NewProjectView = (() => {
     e.preventDefault();
     const name       = document.getElementById('proj-name').value.trim();
     const clientName = document.getElementById('proj-client').value.trim();
-    const domain     = document.getElementById('proj-domain').value.trim();
 
     if (!name)       { App.toast('נא להזין שם פרויקט'); return; }
-    if (!clientName) { App.toast('נא להזין שם חברת פיקוח'); return; }
+    if (!clientName) { App.toast('נא להזין שם חברה'); return; }
 
     const project = {
       id: Storage.generateId(),
       personId: _personId,
       name,
       clientName,
-      domain,
+      domain: '',
       logoData: _logoData,
       createdAt: Date.now(),
     };
-    await Storage.Projects.save(project);
-    App.toast(`פרויקט "${name}" נוצר`);
-    Router.navigate(`/project/${project.id}`);
+    App.showLoading('יוצר פרויקט...');
+    try {
+      await Storage.Projects.save(project);
+      App.toast(`פרויקט "${name}" נוצר`);
+      Router.navigate(`/project/${project.id}`);
+    } catch (err) {
+      App.toast('שגיאה ביצירת פרויקט');
+    } finally {
+      App.hideLoading();
+    }
   }
 
-  return { render, onClientInput, onDomainInput, searchLogo, searchLogoByCompany, handleLogoUpload, clearLogo, submit };
+  return { render, onClientInput, searchLogo, handleLogoUpload, clearLogo, submit };
 })();

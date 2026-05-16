@@ -1,6 +1,32 @@
 const LogoSearch = (() => {
 
-  function testImage(url, timeout = 6000) {
+  // ── Clearbit Autocomplete — free, no API key, works with company names ────────
+  async function searchByName(query) {
+    if (!query?.trim()) return null;
+
+    // 1. Clearbit Autocomplete: returns [{name, domain, logo}]
+    try {
+      const controller = new AbortController();
+      const tid = setTimeout(() => controller.abort(), 6000);
+      const res = await fetch(
+        `https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(query)}`,
+        { signal: controller.signal }
+      );
+      clearTimeout(tid);
+      if (res.ok) {
+        const list = await res.json();
+        if (Array.isArray(list) && list.length > 0 && list[0].logo) {
+          return list[0].logo;
+        }
+      }
+    } catch (_) {}
+
+    // 2. Fall back to domain-guessing approach
+    return _searchByDomain(query);
+  }
+
+  // ── Domain-guess fallback ─────────────────────────────────────────────────────
+  function _testImage(url, timeout = 5000) {
     return new Promise(resolve => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
@@ -11,63 +37,41 @@ const LogoSearch = (() => {
     });
   }
 
-  // המרת שם חברה ל-domain candidates
-  function companyToDomainCandidates(company) {
-    const clean = company.trim()
-      .toLowerCase()
-      .replace(/[א-תיִ-פֿ]+/g, '') // הסרת עברית
-      .replace(/\s+(ltd|inc|corp|llc|group|בעמ|בע"מ|גרופ|מטרו|תכנון|בניין|נדלן|נדל"ן)/gi, '')
-      .trim()
-      .replace(/\s+/g, '-')
-      .replace(/[^a-z0-9\-]/g, '')
-      .replace(/^-+|-+$/g, '');
-
-    if (!clean) return [];
-
-    return [
-      `${clean}.com`,
-      `${clean}.co.il`,
-      `${clean}.org`,
-      `${clean}.net`,
-      `${clean}.il`,
-    ];
-  }
-
-  function toCandidateUrls(query) {
+  function _toCandidateUrls(query) {
     const isHebrew = /[א-ת]/.test(query);
     const urls = [];
 
     if (!isHebrew && query.includes('.')) {
-      // כבר domain
       const domain = query.trim().toLowerCase();
       urls.push(
         `https://logo.clearbit.com/${domain}`,
-        `https://www.google.com/s2/favicons?domain=${domain}&sz=128`,
+        `https://www.google.com/s2/favicons?domain=${domain}&sz=128`
       );
     } else {
-      // שם חברה - נסה domains מגוזרים
-      const domains = companyToDomainCandidates(query);
-      for (const d of domains) {
-        urls.push(`https://logo.clearbit.com/${d}`);
-      }
-      // Google Favicon עם guess
-      if (domains.length > 0) {
-        urls.push(`https://www.google.com/s2/favicons?domain=${domains[0]}&sz=128`);
-      }
-      // DuckDuckGo icon API
-      const encoded = encodeURIComponent(query.replace(/[א-ת\s]/g, '').trim() || query.split(/\s/)[0]);
-      if (encoded) {
-        urls.push(`https://icons.duckduckgo.com/ip3/${encoded}.com.ico`);
+      const clean = query.trim()
+        .toLowerCase()
+        .replace(/[א-תיִ-פֿ]+/g, '')
+        .replace(/\s+(ltd|inc|corp|llc|group|בעמ|בע"מ)/gi, '')
+        .trim()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9\-]/g, '')
+        .replace(/^-+|-+$/g, '');
+
+      if (clean) {
+        urls.push(
+          `https://logo.clearbit.com/${clean}.com`,
+          `https://logo.clearbit.com/${clean}.co.il`,
+          `https://www.google.com/s2/favicons?domain=${clean}.com&sz=128`
+        );
       }
     }
     return urls;
   }
 
-  async function searchByDomain(query) {
-    if (!query?.trim()) return null;
-    const candidates = toCandidateUrls(query);
+  async function _searchByDomain(query) {
+    const candidates = _toCandidateUrls(query);
     for (const url of candidates) {
-      const result = await testImage(url);
+      const result = await _testImage(url);
       if (result) return result;
     }
     return null;
@@ -84,7 +88,7 @@ const LogoSearch = (() => {
           canvas.height = img.naturalHeight || 128;
           canvas.getContext('2d').drawImage(img, 0, 0);
           resolve(canvas.toDataURL('image/png'));
-        } catch (e) {
+        } catch (_) {
           resolve(imgUrl);
         }
       };
@@ -93,5 +97,5 @@ const LogoSearch = (() => {
     });
   }
 
-  return { searchByDomain, toDataUrl };
+  return { searchByName, toDataUrl };
 })();

@@ -94,7 +94,6 @@ const ReportsView = (() => {
     _projectId = projectId;
     const project = await Storage.Projects.get(projectId);
     if (!project) { Router.navigate('/'); return; }
-    const person = await Storage.People.get(project.personId);
 
     App.setHeader(project.name, true, `
       <button class="btn btn-primary btn-sm" onclick="ReportsView.newReport('${projectId}')">
@@ -102,7 +101,9 @@ const ReportsView = (() => {
       </button>
     `);
 
-    const [reports, plans] = await Promise.all([
+    // Fetch person, reports, and plans in parallel
+    const [person, reports, plans] = await Promise.all([
+      Storage.People.get(project.personId),
       Storage.Reports.getForProject(projectId),
       Storage.Plans.getForProject(projectId),
     ]);
