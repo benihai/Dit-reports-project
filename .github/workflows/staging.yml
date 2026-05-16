@@ -19,6 +19,7 @@ jobs:
 
       - name: Deploy to Netlify
         uses: nwtgck/actions-netlify@v2
+        continue-on-error: true
         with:
           publish-dir: '.'
           production-deploy: true
