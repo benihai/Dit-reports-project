@@ -38,7 +38,8 @@ const LoginView = (() => {
 
     try {
       await Auth.login(email, password);
-      // onAuthStateChange in App will handle navigation
+      // Show loading overlay while profile loads and app starts
+      App.showLoading('טוען...');
     } catch (err) {
       errorEl.textContent = 'אימייל או סיסמה שגויים';
       errorEl.classList.remove('hidden');

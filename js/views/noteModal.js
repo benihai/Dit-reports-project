@@ -78,17 +78,25 @@ const NoteModal = (() => {
     _mediaItems  = [];
     _planMarkups = [];
 
-    const report = await Storage.Reports.get(reportId);
-    _projectId   = report?.projectId || null;
+    App.showLoading('טוען...');
+    try {
+      const report = await Storage.Reports.get(reportId);
+      _projectId   = report?.projectId || null;
 
-    let note = null;
-    if (noteId) {
-      note         = await Storage.Notes.get(noteId);
-      _mediaItems  = note?.mediaItems  ? [...note.mediaItems]  : [];
-      _planMarkups = note?.planMarkups ? [...note.planMarkups] : [];
+      // Fetch note and plans in parallel
+      const [note, plans] = await Promise.all([
+        noteId ? Storage.Notes.get(noteId) : Promise.resolve(null),
+        _projectId ? Storage.Plans.getForProject(_projectId) : Promise.resolve([]),
+      ]);
+
+      if (note) {
+        _mediaItems  = note.mediaItems  ? [...note.mediaItems]  : [];
+        _planMarkups = note.planMarkups ? [...note.planMarkups] : [];
+      }
+      _projectPlans = plans;
+    } finally {
+      App.hideLoading();
     }
-
-    _projectPlans = _projectId ? await Storage.Plans.getForProject(_projectId) : [];
 
     let overlay = document.getElementById('note-modal-overlay');
     if (!overlay) {

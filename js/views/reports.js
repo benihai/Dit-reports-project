@@ -226,21 +226,28 @@ const ReportsView = (() => {
   }
 
   async function newReport(projectId) {
-    const reportNumber = await Storage.Reports.getNextNumber(projectId);
-    const report = {
-      id: Storage.generateId(),
-      projectId,
-      reportNumber,
-      siteName:     '',
-      description:  '',
-      floors:       '',
-      date:         new Date().toISOString().slice(0, 10),
-      inspector:    '',
-      participants: '',
-      createdAt:    Date.now(),
-    };
-    await Storage.Reports.save(report);
-    Router.navigate(`/report/${report.id}`);
+    App.showLoading('יוצר דוח...');
+    try {
+      const reportNumber = await Storage.Reports.getNextNumber(projectId);
+      const report = {
+        id: Storage.generateId(),
+        projectId,
+        reportNumber,
+        siteName:     '',
+        description:  '',
+        floors:       '',
+        date:         new Date().toISOString().slice(0, 10),
+        inspector:    '',
+        participants: '',
+        createdAt:    Date.now(),
+      };
+      await Storage.Reports.save(report);
+      Router.navigate(`/report/${report.id}`);
+    } catch (err) {
+      App.toast('שגיאה ביצירת דוח');
+    } finally {
+      App.hideLoading();
+    }
   }
 
   async function exportPdf(reportId, e) {
