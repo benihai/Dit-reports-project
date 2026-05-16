@@ -1,0 +1,32 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin:0; padding:24px; background:#fff; font-family:var(--font-sans);}
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:14px;}
+  .row:last-child { margin-bottom:0;}
+  .lbl { font-family:var(--font-mono); font-size:11px; color:var(--fg-3); width:78px;}
+</style>
+</head>
+<body>
+  <div class="row">
+    <span class="lbl">primary</span>
+    <button class="dit-btn dit-btn--primary">צור דוח חדש</button>
+    <button class="dit-btn dit-btn--primary" style="background:#6FA82B; color:#fff;">hover</button>
+    <button class="dit-btn dit-btn--primary" style="opacity:.55;">disabled</button>
+  </div>
+  <div class="row">
+    <span class="lbl">ink</span>
+    <button class="dit-btn dit-btn--ink">ייצא PDF</button>
+    <button class="dit-btn dit-btn--ink" style="background:#000;">hover</button>
+  </div>
+  <div class="row">
+    <span class="lbl">ghost</span>
+    <button class="dit-btn dit-btn--ghost">ביטול</button>
+    <button class="dit-btn dit-btn--ghost" style="border-color:#1A1A1A;">hover</button>
+    <button class="dit-btn dit-btn--ghost" style="box-shadow:0 0 0 3px rgba(140,198,63,.35);">focus</button>
+  </div>
+</body>
+</html>

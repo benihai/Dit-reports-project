@@ -1,0 +1,243 @@
+/* ============================================================
+   DIT — Design It Right
+   Colors, Typography & Foundations
+   ------------------------------------------------------------
+   Brand: DIT, construction supervision & inspection
+   Language: Hebrew (RTL primary), English (LTR secondary)
+   ============================================================ */
+
+/* ---- Fonts: Assistant + Heebo (Hebrew + Latin) ---- */
+@import url("https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;500;600;700;800&family=Heebo:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap");
+
+:root {
+  /* ========== COLOR — Brand ========== */
+  --dit-green:           #8CC63F;  /* DIT primary green — logo + accents */
+  --dit-green-700:       #6FA82B;  /* hover / pressed */
+  --dit-green-300:       #BCDE85;  /* tint, soft fills */
+  --dit-green-100:       #EDF6DC;  /* surface tint (callouts) */
+  --dit-green-50:        #F6FAEC;  /* faintest tint */
+
+  /* ========== COLOR — Foreground / neutrals ========== */
+  --fg-1:                #1A1A1A;  /* primary text, headlines */
+  --fg-2:                #3A3A3A;  /* body */
+  --fg-3:                #6B6B6B;  /* secondary / meta */
+  --fg-4:                #9A9A9A;  /* tertiary / hint */
+  --fg-disabled:         #BFBFBF;
+
+  /* ========== COLOR — Surface ========== */
+  --bg-page:             #FFFFFF;
+  --bg-surface:          #FAFAF8;  /* off-white panels */
+  --bg-elev:             #FFFFFF;
+  --bg-muted:            #F2F2EF;  /* subtle row band */
+  --bg-ink:              #1A1A1A;  /* dark sections / footer */
+  --bg-ink-2:            #232323;
+
+  /* ========== COLOR — Lines ========== */
+  --line-1:              #E6E6E2;  /* default hairline */
+  --line-2:              #D1D1CC;  /* stronger separator */
+  --line-strong:         #1A1A1A;  /* contract-grade rule */
+
+  /* ========== COLOR — Status / Urgency ========== */
+  /* Inspection reports require explicit priority signaling. */
+  --urgency-critical:    #C8321F;  /* קריטי */
+  --urgency-critical-bg: #FBE9E5;
+  --urgency-medium:      #D88A0C;  /* בינוני */
+  --urgency-medium-bg:   #FBEFD7;
+  --urgency-low:         #6FA82B;  /* נמוך — uses brand green */
+  --urgency-low-bg:      #EDF6DC;
+  --status-info:         #2A6FB8;
+  --status-info-bg:      #E4EEF8;
+
+  /* ========== COLOR — Focus / overlay ========== */
+  --focus-ring:          #8CC63F;
+  --overlay-scrim:       rgba(26, 26, 26, 0.55);
+
+  /* ========== TYPE — Families ========== */
+  --font-sans:           "Assistant", "Heebo", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-display:        "Heebo", "Assistant", "Segoe UI", Arial, sans-serif;
+  --font-mono:           "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+
+  /* ========== TYPE — Scale (modular, 1.2 ratio for reports) ========== */
+  --fs-xxl:              40px;  /* report title */
+  --fs-xl:               28px;  /* section heads */
+  --fs-lg:               22px;  /* finding titles */
+  --fs-md:               18px;  /* sub-heads */
+  --fs-base:             16px;  /* body */
+  --fs-sm:               14px;  /* meta */
+  --fs-xs:               12px;  /* labels, captions */
+
+  --lh-tight:            1.15;
+  --lh-snug:             1.35;
+  --lh-base:             1.55;
+  --lh-loose:            1.75;
+
+  --tracking-tight:      -0.01em;
+  --tracking-normal:     0;
+  --tracking-wide:       0.04em;
+  --tracking-caps:       0.12em;
+
+  /* ========== SPACING ========== */
+  --s-1:                 4px;
+  --s-2:                 8px;
+  --s-3:                 12px;
+  --s-4:                 16px;
+  --s-5:                 20px;
+  --s-6:                 24px;
+  --s-8:                 32px;
+  --s-10:                40px;
+  --s-12:                48px;
+  --s-16:                64px;
+  --s-20:                80px;
+
+  /* ========== RADII ========== */
+  --r-0:                 0px;
+  --r-1:                 4px;
+  --r-2:                 8px;
+  --r-3:                 12px;
+  --r-pill:              999px;
+
+  /* ========== SHADOWS / ELEVATION ========== */
+  /* DIT skews engineering — shadows are restrained, never showy. */
+  --shadow-1:            0 1px 2px rgba(26, 26, 26, 0.06);
+  --shadow-2:            0 2px 8px rgba(26, 26, 26, 0.08);
+  --shadow-3:            0 8px 24px rgba(26, 26, 26, 0.10);
+  --shadow-focus:        0 0 0 3px rgba(140, 198, 63, 0.35);
+
+  /* ========== MOTION ========== */
+  --ease-standard:       cubic-bezier(0.2, 0.0, 0.2, 1);
+  --dur-fast:            120ms;
+  --dur-base:            200ms;
+  --dur-slow:            320ms;
+}
+
+/* ============================================================
+   SEMANTIC TYPE TOKENS
+   ============================================================ */
+
+html { direction: rtl; }  /* DIT is Hebrew-first */
+body {
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  line-height: var(--lh-base);
+  color: var(--fg-1);
+  background: var(--bg-page);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+}
+
+.h-display, h1.display {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: var(--fs-xxl);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--fg-1);
+}
+h1, .h1 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: var(--fs-xl);
+  line-height: var(--lh-tight);
+  color: var(--fg-1);
+}
+h2, .h2 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--fs-lg);
+  line-height: var(--lh-snug);
+  color: var(--fg-1);
+}
+h3, .h3 {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: var(--fs-md);
+  line-height: var(--lh-snug);
+  color: var(--fg-1);
+}
+p, .p {
+  font-size: var(--fs-base);
+  line-height: var(--lh-base);
+  color: var(--fg-2);
+}
+.meta, small {
+  font-size: var(--fs-sm);
+  color: var(--fg-3);
+}
+.eyebrow {
+  font-size: var(--fs-xs);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--dit-green-700);
+  font-weight: 700;
+}
+.label {
+  font-size: var(--fs-xs);
+  letter-spacing: var(--tracking-wide);
+  color: var(--fg-3);
+  font-weight: 600;
+}
+code, .mono {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  color: var(--fg-1);
+}
+
+/* ============================================================
+   UTILITY CLASSES (used across UI kit + cards)
+   ============================================================ */
+
+.dit-rule       { border: 0; border-top: 1px solid var(--line-1); height: 0; }
+.dit-rule-strong{ border: 0; border-top: 2px solid var(--fg-1); height: 0; }
+.dit-rule-green { border: 0; border-top: 3px solid var(--dit-green); height: 0; }
+
+.dit-card {
+  background: var(--bg-elev);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-2);
+  box-shadow: var(--shadow-1);
+}
+
+.dit-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: var(--tracking-wide);
+}
+.dit-badge--critical { color: var(--urgency-critical); background: var(--urgency-critical-bg); }
+.dit-badge--medium   { color: var(--urgency-medium);   background: var(--urgency-medium-bg); }
+.dit-badge--low      { color: var(--urgency-low);      background: var(--urgency-low-bg); }
+.dit-badge--info     { color: var(--status-info);      background: var(--status-info-bg); }
+
+.dit-btn {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: var(--fs-sm);
+  padding: 10px 18px;
+  border-radius: var(--r-1);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-standard),
+              color var(--dur-fast) var(--ease-standard),
+              transform var(--dur-fast) var(--ease-standard);
+}
+.dit-btn--primary {
+  background: var(--dit-green);
+  color: var(--fg-1);
+}
+.dit-btn--primary:hover  { background: var(--dit-green-700); color: #fff; }
+.dit-btn--primary:active { transform: translateY(1px); }
+.dit-btn--ghost {
+  background: transparent;
+  color: var(--fg-1);
+  border-color: var(--line-2);
+}
+.dit-btn--ghost:hover { border-color: var(--fg-1); }
+.dit-btn--ink {
+  background: var(--fg-1);
+  color: #fff;
+}
+.dit-btn--ink:hover { background: #000; }

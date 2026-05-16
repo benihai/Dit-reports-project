@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#8DC63F">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="DIT Report">
+  <title>DIT Report</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+
+  <!-- Global JS error display — shows any crash in the page instead of silent blank screen -->
+  <script>
+    window.onerror = function(msg, src, line, col, err) {
+      var vc = document.getElementById('view-container');
+      if (vc) vc.innerHTML =
+        '<div style="padding:24px;color:#dc2626;font-family:monospace;font-size:13px;background:#fef2f2;margin:16px;border-radius:8px;border:1px solid #fca5a5;">' +
+        '<b>שגיאת JavaScript:</b><br>' + msg + '<br><small>' + src + ':' + line + '</small></div>';
+      return false;
+    };
+  </script>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="header" id="app-header">
+    <button class="btn-icon hidden" id="btn-back" onclick="App.goBack()" aria-label="חזרה">
+      <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+        <polyline points="9 18 15 12 9 6"/>
+      </svg>
+    </button>
+
+    <img src="icons/dit-logo.png" alt="DIT Report" class="header-logo" id="header-logo" onclick="Router.navigate('/')" role="button" aria-label="דף הבית">
+    <span id="header-title"></span>
+
+    <div id="header-actions"></div>
+  </header>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content" id="view-container">
+    <div style="padding:40px;text-align:center;color:#888;">טוען...</div>
+  </main>
+
+  <!-- MARKUP FULLSCREEN (hidden by default) -->
+  <div id="markup-screen" class="hidden"></div>
+
+  <!-- CONFIRM OVERLAY -->
+  <div id="confirm-overlay" class="modal-overlay hidden" style="align-items:center;">
+    <div class="modal-box confirm-box" onclick="event.stopPropagation()" style="max-width:320px;width:calc(100% - 32px);text-align:center;border-radius:var(--radius);padding:24px 20px 20px;">
+      <p id="confirm-message"></p>
+      <div class="confirm-actions">
+        <button class="btn btn-danger btn-sm" id="confirm-yes">מחק</button>
+        <button class="btn btn-outline btn-sm" id="confirm-no">ביטול</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div class="toast" id="toast"></div>
+
+  <!-- HIDDEN PDF RENDER AREA -->
+  <div id="pdf-template" style="position:fixed;left:-9999px;top:0;width:794px;background:white;"></div>
+
+  <!-- SUPABASE — local copy, no CDN dependency -->
+  <script src="js/vendor/supabase.js"></script>
+
+  <!-- LIBRARIES: localforage needed on boot; others loaded lazily by PdfExport/PdfMarkup -->
+  <script src="https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js"></script>
+
+  <!-- CONFIG & SUPABASE CLIENT (load first) -->
+  <script src="js/config.js?v=4.0"></script>
+  <script src="js/supabase-client.js?v=4.0"></script>
+  <script src="js/auth.js?v=4.0"></script>
+
+  <!-- APP SCRIPTS (order matters) -->
+  <script src="js/router.js?v=4.0"></script>
+  <script src="js/storage.js?v=4.0"></script>
+  <script src="js/logoSearch.js?v=4.0"></script>
+  <script src="js/pdfMarkup.js?v=4.0"></script>
+  <script src="js/pdfExport.js?v=4.0"></script>
+  <script src="js/views/login.js?v=4.0"></script>
+  <script src="js/views/viewerReports.js?v=4.0"></script>
+  <script src="js/views/admin.js?v=4.0"></script>
+  <script src="js/views/people.js?v=4.0"></script>
+  <script src="js/views/projects.js?v=4.0"></script>
+  <script src="js/views/newProject.js?v=4.0"></script>
+  <script src="js/views/reports.js?v=4.0"></script>
+  <script src="js/views/noteModal.js?v=4.0"></script>
+  <script src="js/views/report.js?v=4.0"></script>
+  <script src="js/app.js?v=4.0"></script>
+</body>
+</html>

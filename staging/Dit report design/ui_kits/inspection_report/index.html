@@ -1,0 +1,196 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DIT · דוח סיור פיקוח עליון</title>
+<link rel="stylesheet" href="../../colors_and_type.css">
+<style>
+  html, body { background:#EFEEEA; }
+  body {
+    margin:0; padding:0;
+    font-family: var(--font-sans);
+    color: var(--fg-1);
+    min-height:100vh;
+  }
+  .page-shell {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 24px 16px 64px;
+  }
+  .doc {
+    background:#fff;
+    border:1px solid #E6E6E2;
+    box-shadow: 0 8px 24px rgba(26,26,26,.06);
+  }
+  .findings {
+    max-width:794px;
+    margin:0 auto;
+    padding: 24px 28px 8px;
+  }
+  .findings h2 {
+    margin: 0 0 16px;
+    font-family:'Heebo',sans-serif; font-weight:800;
+    font-size:14px; letter-spacing:.12em; text-transform:uppercase;
+    color:#6FA82B;
+  }
+  footer.doc-foot {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:14px 28px; background:#1A1A1A; color:#fff;
+    font-family:var(--font-sans); font-size:12px;
+  }
+  footer.doc-foot .grn { color:#8CC63F; font-weight:800; letter-spacing:.04em;}
+  @media print {
+    body { background:#fff; }
+    .page-shell { padding:0; max-width:none;}
+    .toolbar-wrap { display:none !important;}
+    .doc { box-shadow:none; border:none;}
+  }
+</style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<!-- React + Babel -->
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="Icon.jsx"></script>
+<script type="text/babel" src="UrgencyBadge.jsx"></script>
+<script type="text/babel" src="ReportHeader.jsx"></script>
+<script type="text/babel" src="MetadataBlock.jsx"></script>
+<script type="text/babel" src="FindingCard.jsx"></script>
+<script type="text/babel" src="SummaryBlock.jsx"></script>
+<script type="text/babel" src="Toolbar.jsx"></script>
+
+<script type="text/babel">
+const { useState } = React;
+
+const INITIAL_FINDINGS = [
+  {
+    title: "כבילת תקשורת חשופה בפיר ראשי, קומה 4",
+    description: "נצפו כבלי תקשורת (CAT-6 ו-Fiber) זרוקים על הרצפה בפיר התקשורת המרכזי בקומה 4, ללא סידור במגשי כבלים וללא סימון. קיים סיכון נגיעה ופגיעה מכאנית במהלך עבודות גמר.",
+    instruction: "הקבלן יסדר את הכבלים במגשים ייעודיים בהתאם לתוכנית התקשורת. נדרשת סימון לפי תקן ת״י 1907 חלק 2.1.",
+    photo: "https://images.unsplash.com/photo-1581094271901-8022df4466f9?auto=format&fit=crop&w=600",
+    photoCaption: "פיר תקשורת ראשי · 14.05.2026",
+    urgency: "critical",
+    owner: "קבלן חשמל — מ. רוזן עבודות חשמל בע״מ",
+    dueDate: "18.05.2026",
+    reference: "FIND-042-01",
+    standard: "ת״י 1907 · סע׳ 4.2"
+  },
+  {
+    title: "סטייה גיאומטרית בקיר גבס — חדר ישיבות 4-08",
+    description: "נמדדה סטייה אנכית של עד 12 מ״מ לאורך 2.4 מ׳ בקיר הגבס המערבי של חדר הישיבות 4-08, בניגוד לתוכנית האדריכלות (A-407, גרסה 3). הסטייה חורגת מהסובלנות המותרת לפי המפרט הטכני.",
+    instruction: "פירוק ויישור הקיר. נדרש מדידת לייזר חוזרת ואישור המפקח טרם המשך גמרים.",
+    photo: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=600",
+    photoCaption: "חדר ישיבות 4-08 · קיר מערבי",
+    urgency: "medium",
+    owner: "קבלן ראשי — אחים לוי בע״מ",
+    dueDate: "22.05.2026",
+    reference: "FIND-042-02",
+    standard: "מפרט 09.21 · סע׳ 2.4"
+  },
+  {
+    title: "תיעוד AS-MADE לשרוולי תשתית — חסר",
+    description: "לא הוצגו תוכניות AS-MADE עבור שרוולי התשתית שיצקו ברצפת קומה 4. נדרש לתעד את מיקום ומידות השרוולים לפני יציקת רצפה צפה.",
+    instruction: "הקבלן יספק תוכניות AS-MADE חתומות תוך 5 ימי עבודה. ללא תוכניות לא תאושר יציקת רצפה צפה.",
+    urgency: "low",
+    owner: "קבלן ראשי — אחים לוי בע״מ",
+    dueDate: "27.05.2026",
+    reference: "FIND-042-03",
+    standard: "הסכם · נספח ה׳"
+  },
+];
+
+const META = {
+  project: "מגדלי רמות — מגרש 4071",
+  location: "רחוב הברזל 23, רמת השרון · קומה 4",
+  date: "14.05.2026",
+  inspector: "אורי בן-דוד, מפקח מטעם DIT",
+  participants: "שיר איתי (DIT), יוסי לוי (קבלן ראשי), מ. רוזן (חשמל)",
+  purpose: "סיור סטטוס שבועי · בקרת מערכות וטרם יציקת רצפה צפה",
+};
+
+const SUMMARY = "מצב הפרויקט סביר, עומד בלוחות הזמנים ביחס לאבן הדרך השבועית. אותרו 3 ממצאים: ממצא קריטי אחד הדורש טיפול מיידי טרם המשך עבודות חשמל, וממצא בינוני בקיר הגבס שיש לתקן לפני שלב הגמרים. נדרש אישור AS-MADE טרם יציקת הרצפה הצפה המתוכננת.";
+
+function App() {
+  const [findings, setFindings] = useState(INITIAL_FINDINGS);
+  const [flash, setFlash] = useState(null);
+
+  const handleAdd = () => {
+    setFindings([...findings, {
+      title: "ממצא חדש — לחץ לעריכה",
+      description: "תיאור הליקוי שנצפה בשטח, כולל הפניה לתקן או סעיף במפרט.",
+      instruction: "הנחיה לקבלן המבצע.",
+      urgency: "low",
+      owner: "קבלן ראשי",
+      dueDate: "—",
+      reference: `FIND-042-${String(findings.length + 1).padStart(2,"0")}`,
+    }]);
+    setFlash("ממצא נוסף לדוח");
+    setTimeout(() => setFlash(null), 1800);
+  };
+
+  return (
+    <div data-screen-label="01 Inspection Report">
+      <div className="toolbar-wrap">
+        <Toolbar
+          findingCount={findings.length}
+          onAdd={handleAdd}
+          onPrint={() => window.print()}
+          onExport={() => { setFlash("ייצוא ל-PDF (דמו)"); setTimeout(()=>setFlash(null),1800); }}
+        />
+      </div>
+
+      <div className="page-shell">
+        <div className="doc">
+          <ReportHeader
+            title="דוח סיור פיקוח עליון"
+            subtitle="DIT — Design It Right · ניהול ופיקוח בנייה"
+            reportId="REP-2026-042"
+          />
+          <MetadataBlock meta={META}/>
+
+          <section className="findings">
+            <h2>ממצאים והערות ({findings.length})</h2>
+            {findings.map((f, i) => (
+              <FindingCard key={i} index={i + 1} finding={f}/>
+            ))}
+          </section>
+
+          <SummaryBlock
+            summary={SUMMARY}
+            nextVisit="יום שני · 21.05.2026 · 09:30"
+            signedBy="אורי בן-דוד, מפקח DIT"
+          />
+
+          <footer className="doc-foot">
+            <span>עמ׳ 1 מתוך 6 · נחתם דיגיטלית · {META.date}</span>
+            <span><span className="grn">DIT</span> · Design It Right</span>
+          </footer>
+        </div>
+      </div>
+
+      {flash && (
+        <div style={{
+          position:"fixed", bottom:24, left:"50%", transform:"translateX(-50%)",
+          background:"#1A1A1A", color:"#fff", padding:"10px 18px", borderRadius:999,
+          fontFamily:"var(--font-sans)", fontSize:13, fontWeight:600,
+          boxShadow:"0 8px 24px rgba(26,26,26,.2)",
+          display:"inline-flex", alignItems:"center", gap:8, zIndex:50
+        }}>
+          <span style={{width:8, height:8, background:"#8CC63F", borderRadius:999}}/>
+          {flash}
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>

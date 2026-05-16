@@ -1,0 +1,28 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin:0; padding:20px; background:#fff; }
+  .row { display:flex; gap:10px; }
+  .sw { flex:1; min-width:0; border-radius:8px; overflow:hidden; border:1px solid var(--line-1); }
+  .chip { height:80px; display:flex; align-items:flex-end; padding:10px 12px; font-family:var(--font-mono); font-size:12px; font-weight:600;}
+  .meta { padding:8px 12px; background:#fff; font-family:var(--font-sans); }
+  .name { font-size:12px; font-weight:700; color:var(--fg-1); }
+  .hex  { font-family:var(--font-mono); font-size:11px; color:var(--fg-3); margin-top:2px;}
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="sw"><div class="chip" style="background:#1A1A1A; color:#fff;">fg-1</div><div class="meta"><div class="name">--fg-1</div><div class="hex">#1A1A1A</div></div></div>
+    <div class="sw"><div class="chip" style="background:#3A3A3A; color:#fff;">fg-2</div><div class="meta"><div class="name">--fg-2</div><div class="hex">#3A3A3A</div></div></div>
+    <div class="sw"><div class="chip" style="background:#6B6B6B; color:#fff;">fg-3</div><div class="meta"><div class="name">--fg-3</div><div class="hex">#6B6B6B</div></div></div>
+    <div class="sw"><div class="chip" style="background:#9A9A9A; color:#fff;">fg-4</div><div class="meta"><div class="name">--fg-4</div><div class="hex">#9A9A9A</div></div></div>
+    <div class="sw"><div class="chip" style="background:#D1D1CC; color:#1A1A1A;">line-2</div><div class="meta"><div class="name">--line-2</div><div class="hex">#D1D1CC</div></div></div>
+    <div class="sw"><div class="chip" style="background:#E6E6E2; color:#1A1A1A;">line-1</div><div class="meta"><div class="name">--line-1</div><div class="hex">#E6E6E2</div></div></div>
+    <div class="sw"><div class="chip" style="background:#F2F2EF; color:#1A1A1A; border-bottom:1px solid var(--line-1);">muted</div><div class="meta"><div class="name">--bg-muted</div><div class="hex">#F2F2EF</div></div></div>
+    <div class="sw"><div class="chip" style="background:#FAFAF8; color:#1A1A1A; border-bottom:1px solid var(--line-1);">surface</div><div class="meta"><div class="name">--bg-surface</div><div class="hex">#FAFAF8</div></div></div>
+  </div>
+</body>
+</html>

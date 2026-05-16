@@ -1,0 +1,44 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin:0; padding:22px; background:#fff; font-family:var(--font-sans);}
+  .grid { display:grid; grid-template-columns: 1fr 1fr; gap:14px;}
+  label { display:block; font-size:12px; color:#6B6B6B; font-weight:600; margin-bottom:6px; letter-spacing:.02em;}
+  .input, select, textarea {
+    width:100%; box-sizing:border-box;
+    background:#fff; border:1px solid #D1D1CC; border-radius:4px;
+    padding:10px 12px; font-family:inherit; font-size:14px; color:#1A1A1A;
+    transition: border .12s ease, box-shadow .12s ease;
+  }
+  .input:focus, select:focus, textarea:focus { outline:none; border-color:#8CC63F; box-shadow:0 0 0 3px rgba(140,198,63,.35);}
+  .input.error { border-color:#C8321F;}
+  .help { font-size:11px; color:#6B6B6B; margin-top:4px;}
+  .help.err { color:#C8321F;}
+  .switch { display:inline-flex; align-items:center; gap:10px; cursor:pointer;}
+  .track { width:36px; height:20px; background:#8CC63F; border-radius:999px; position:relative;}
+  .knob { position:absolute; top:2px; left:2px; width:16px; height:16px; background:#fff; border-radius:999px;}
+</style>
+</head>
+<body>
+  <div class="grid">
+    <div><label>שם הפרויקט</label><input class="input" value="מגדלי רמות — מגרש 4071"></div>
+    <div><label>תאריך הסיור</label><input class="input" value="14.05.2026"></div>
+    <div><label>מיקום / קומה</label><input class="input" value="קומה 4, אגף מזרחי"></div>
+    <div><label>סטטוס</label>
+      <select><option>בביצוע</option><option>הושלם</option><option>בהמתנה</option></select>
+    </div>
+    <div style="grid-column: span 2;"><label>תיאור הליקוי</label>
+      <textarea rows="2">נצפתה חשיפה של כבילת תקשורת בפיר ראשי בקומה 4.</textarea>
+      <div class="help">השתמש בלשון הנדסית; ציין תקן או סעיף במפרט.</div>
+    </div>
+    <div style="grid-column: span 2; display:flex; gap:18px; align-items:center;">
+      <span class="switch"><span class="track"><span class="knob" style="left:auto; right:2px;"></span></span><span>שתף עם הקבלן</span></span>
+      <span style="font-size:12px; color:#6B6B6B;">·</span>
+      <span class="help err">שדה חובה — יש לבחור דחיפות</span>
+    </div>
+  </div>
+</body>
+</html>

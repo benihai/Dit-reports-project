@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>דוח סיור פיקוח — דוגמה</title>
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&family=Assistant:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    html { direction: rtl; }
+    body {
+      font-family: 'Heebo', 'Assistant', Arial, sans-serif;
+      background: #EFEEEA;
+      color: #1A1A1A;
+      margin: 0;
+      padding: 20px;
+    }
+    .page-wrapper {
+      max-width: 900px;
+      margin: 0 auto;
+      background: #fff;
+      box-shadow: 0 8px 24px rgba(26,26,26,.1);
+      border: 1px solid #E6E6E2;
+    }
+    /* Header */
+    header {
+      background: #fff;
+      border-bottom: 2px solid #1A1A1A;
+    }
+    .header-stripe {
+      height: 3px;
+      background: #8CC63F;
+    }
+    .header-content {
+      display: grid;
+      grid-template-columns: 1fr 2fr 1fr;
+      align-items: center;
+      gap: 18px;
+      padding: 22px 28px;
+      max-width: 794px;
+      margin: 0 auto;
+    }
+    .logo-slot { display: flex; justify-content: flex-start; }
+    .logo-slot img { height: 64px; width: auto; }
+    .title-slot { text-align: center; }
+    .title-slot h1 {
+      font-size: 24px;
+      font-weight: 800;
+      margin: 0 0 4px;
+      line-height: 1.15;
+    }
+    .title-slot .subtitle {
+      font-size: 13px;
+      color: #6B6B6B;
+      margin: 4px 0 0;
+    }
+    .title-slot .reportid {
+      font-family: monospace;
+      font-size: 11px;
+      color: #6B6B6B;
+      letter-spacing: .06em;
+      margin-top: 6px;
+    }
+    .client-slot {
+      display: flex;
+      justify-content: flex-end;
+    }
+    .client-placeholder {
+      width: 130px;
+      height: 68px;
+      border: 1.5px dashed #BFBFBF;
+      border-radius: 6px;
+      background: repeating-linear-gradient(135deg, #FAFAF8 0 8px, #F2F2EF 8px 16px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: #9A9A9A;
+      text-align: center;
+      padding: 4px;
+    }
+
+    /* Metadata */
+    .metadata {
+      max-width: 794px;
+      margin: 0 auto;
+      padding: 22px 28px 16px;
+      border-bottom: 1px solid #E6E6E2;
+    }
+    .metadata h2 {
+      margin: 0 0 14px;
+      font-family: 'Heebo', sans-serif;
+      font-weight: 800;
+      font-size: 14px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: #6FA82B;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px 32px;
+    }
+    .meta-item {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .meta-item svg {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+      margin-top: 2px;
+      stroke: #9A9A9A;
+      stroke-width: 1.6;
+      fill: none;
+    }
+    .meta-label {
+      font-size: 11px;
+      color: #6B6B6B;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+    .meta-value {
+      font-size: 15px;
+      color: #1A1A1A;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    /* Findings */
+    .findings {
+      max-width: 794px;
+      margin: 0 auto;
+      padding: 24px 28px 8px;
+    }
+    .findings h2 {
+      margin: 0 0 16px;
+      font-family: 'Heebo', sans-serif;
+      font-weight: 800;
+      font-size: 14px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: #6FA82B;
+    }
+
+    /* Card */
+    .card {
+      background: #fff;
+      border: 1px solid #E6E6E2;
+      border-radius: 8px;
+      box-shadow: 0 1px 2px rgba(26,26,26,.06);
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+    .card-head {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 18px;
+      border-bottom: 1px solid #E6E6E2;
+    }
+    .card-num {
+      font-family: monospace;
+      font-size: 11px;
+      font-weight: 700;
+      background: #1A1A1A;
+      color: #fff;
+      padding: 4px 12px;
+      border-radius: 999px;
+      letter-spacing: .04em;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .card-title {
+      margin: 0;
+      font-family: 'Heebo', sans-serif;
+      font-weight: 700;
+      font-size: 18px;
+      color: #1A1A1A;
+      flex: 1;
+      line-height: 1.3;
+    }
+    .card-body {
+      display: grid;
+      grid-template-columns: 1.5fr 1fr;
+      gap: 18px;
+      padding: 16px 18px;
+    }
+    .card-desc {
+      font-size: 14px;
+      color: #3A3A3A;
+      line-height: 1.65;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    .card-photo {
+      margin: 0;
+    }
+    .card-photo-img {
+      height: 160px;
+      border-radius: 4px;
+      border: 1px solid #D1D1CC;
+      background: #E6E6E2 center/cover;
+      overflow: hidden;
+    }
+    .card-photo-img img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .card-photo figcaption {
+      font-size: 11px;
+      color: #6B6B6B;
+      margin-top: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .card-footer {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      padding: 12px 18px;
+      background: #FAFAF8;
+      border-top: 1px solid #E6E6E2;
+      font-size: 13px;
+      color: #6B6B6B;
+    }
+    .card-footer b { color: #1A1A1A; }
+    .sep { color: #D1D1CC; }
+
+    /* Summary */
+    .summary {
+      max-width: 794px;
+      margin: 0 auto;
+      padding: 24px 28px 32px;
+      border-top: 2px solid #1A1A1A;
+    }
+    .summary h2 {
+      margin: 0 0 14px;
+      font-family: 'Heebo', sans-serif;
+      font-weight: 800;
+      font-size: 14px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: #6FA82B;
+    }
+    .summary-box {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      padding: 14px 16px;
+      background: #F6FAEC;
+      border-radius: 8px;
+      border: 1px solid #BCDE85;
+    }
+    .summary-item {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .summary-item svg {
+      width: 16px;
+      height: 16px;
+      stroke: #6FA82B;
+      fill: none;
+      stroke-width: 1.6;
+    }
+    .summary-label {
+      font-size: 11px;
+      color: #6B6B6B;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    .summary-value {
+      font-family: 'Heebo', sans-serif;
+      font-weight: 700;
+      font-size: 16px;
+      color: #1A1A1A;
+      margin-top: 2px;
+    }
+
+    /* Footer */
+    footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 28px;
+      background: #1A1A1A;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+    }
+    footer .grn { color: #8CC63F; font-weight: 800; letter-spacing: .04em; }
+  </style>
+</head>
+<body>
+
+<div class="page-wrapper">
+
+  <!-- HEADER -->
+  <header>
+    <div class="header-stripe"></div>
+    <div class="header-content">
+      <div class="logo-slot">
+        <img src="icons/dit-logo.png" alt="DIT">
+      </div>
+      <div class="title-slot">
+        <h1>דוח סיור פיקוח עליון</h1>
+        <div class="subtitle">DIT — Design It Right · ניהול ופיקוח בנייה</div>
+        <div class="reportid">REP-0042 · 14/05/2026</div>
+      </div>
+      <div class="client-slot">
+        <div class="client-placeholder">לוגו פרויקט / לקוח</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- METADATA -->
+  <section class="metadata">
+    <h2>פרטי הסיור</h2>
+    <div class="meta-grid">
+      <div class="meta-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+        <div>
+          <div class="meta-label">שם הפרויקט</div>
+          <div class="meta-value">מגדלי רמות — מגרש 4071</div>
+        </div>
+      </div>
+      <div class="meta-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        <div>
+          <div class="meta-label">מיקום / אתר</div>
+          <div class="meta-value">רחוב הברזל 23, רמת השרון · קומה 4</div>
+        </div>
+      </div>
+      <div class="meta-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <div>
+          <div class="meta-label">תאריך הסיור</div>
+          <div class="meta-value">14/05/2026</div>
+        </div>
+      </div>
+      <div class="meta-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <div>
+          <div class="meta-label">מפקח מטעם DIT</div>
+          <div class="meta-value">אורי בן-דוד</div>
+        </div>
+      </div>
+      <div class="meta-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <div>
+          <div class="meta-label">משתתפים נוספים</div>
+          <div class="meta-value">שיר איתי (DIT), יוסי לוי (קבלן)</div>
+        </div>
+      </div>
+      <div class="meta-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        <div>
+          <div class="meta-label">מטרת הסיור</div>
+          <div class="meta-value">סיור סטטוס שבועי · בקרת מערכות</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FINDINGS -->
+  <section class="findings">
+    <h2>ממצאים והערות (2)</h2>
+
+    <!-- CARD 1 -->
+    <div class="card">
+      <div class="card-head">
+        <span class="card-num">ממצא 01</span>
+        <h3 class="card-title">כבילת תקשורת חשופה בפיר ראשי</h3>
+      </div>
+      <div class="card-body">
+        <div class="card-desc">נצפו כבלי תקשורת (CAT-6 ו-Fiber) זרוקים על הרצפה בפיר התקשורת המרכזי בקומה 4, ללא סידור במגשי כבלים וללא סימון. קיים סיכון נגיעה ופגיעה מכאנית במהלך עבודות גמר. הקבלן יסדר את הכבלים במגשים ייעודיים בהתאם לתוכנית התקשורת. נדרשת סימון לפי תקן ת״י 1907 חלק 2.1.</div>
+        <figure class="card-photo">
+          <div class="card-photo-img">
+            <img src="https://images.unsplash.com/photo-1581094271901-8022df4466f9?auto=format&fit=crop&w=600" alt="פיר תקשורת">
+          </div>
+          <figcaption>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+            קומה 4 · פיר תקשורת · 14/05/2026
+          </figcaption>
+        </figure>
+      </div>
+      <div class="card-footer">
+        <span>באחריות: <b>מ. רוזן עבודות חשמל בע"מ</b></span>
+        <span class="sep">·</span>
+        <span style="font-family:monospace;font-size:11px;">FIND-042-01</span>
+      </div>
+    </div>
+
+    <!-- CARD 2 -->
+    <div class="card">
+      <div class="card-head">
+        <span class="card-num">ממצא 02</span>
+        <h3 class="card-title">סטייה גיאומטרית בקיר גבס</h3>
+      </div>
+      <div class="card-body">
+        <div class="card-desc">נמדדה סטייה אנכית של עד 12 מ״מ לאורך 2.4 מ׳ בקיר הגבס המערבי של חדר הישיבות 4-08, בניגוד לתוכנית האדריכלות (A-407, גרסה 3). הסטייה חורגת מהסובלנות המותרת לפי המפרט הטכני. פירוק ויישור הקיר. נדרש מדידת לייזר חוזרת ואישור המפקח טרם המשך גמרים.</div>
+        <figure class="card-photo">
+          <div class="card-photo-img">
+            <img src="https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=600" alt="קיר גבס">
+          </div>
+          <figcaption>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+            חדר ישיבות 4-08 · קיר מערבי · 14/05/2026
+          </figcaption>
+        </figure>
+      </div>
+      <div class="card-footer">
+        <span>באחריות: <b>אחים לוי בע"מ</b></span>
+        <span class="sep">·</span>
+        <span style="font-family:monospace;font-size:11px;">FIND-042-02</span>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- SUMMARY -->
+  <section class="summary">
+    <h2>סיכום והנחיות להמשך</h2>
+    <div class="summary-box">
+      <div class="summary-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <div>
+          <div class="summary-label">תאריך הסיור</div>
+          <div class="summary-value">14/05/2026</div>
+        </div>
+      </div>
+      <div class="summary-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <div>
+          <div class="summary-label">נחתם על ידי</div>
+          <div class="summary-value">אורי בן-דוד, מפקח DIT</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <span>דוח #42 · 14/05/2026</span>
+    <span><span class="grn">DIT</span> · Design It Right</span>
+  </footer>
+
+</div>
+
+</body>
+</html>

@@ -1,0 +1,47 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin:0; padding:18px; background:#FAFAF8; font-family:var(--font-sans); }
+  .finding {
+    background:#fff; border:1px solid var(--line-1); border-radius:8px;
+    box-shadow: 0 1px 2px rgba(26,26,26,.06);
+    overflow:hidden;
+  }
+  .hd { display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:1px solid var(--line-1); }
+  .num { font-family:var(--font-mono); font-size:11px; background:#1A1A1A; color:#fff; padding:3px 9px; border-radius:999px; font-weight:700;}
+  .title { font-family:'Heebo',sans-serif; font-weight:700; font-size:17px; color:#1A1A1A; }
+  .grow { flex:1;}
+  .badge { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:700;}
+  .body { display:grid; grid-template-columns: 1.4fr 1fr; gap:16px; padding:14px 18px;}
+  .desc { font-size:14px; color:#1A1A1A; line-height:1.6; }
+  .desc .lead { color:#3A3A3A; }
+  .desc .action { display:block; margin-top:10px; padding-right:12px; border-right:3px solid #8CC63F; font-weight:600; }
+  .photo { background:#E6E6E2 url("https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=600") center/cover; height:140px; border:1px solid var(--line-2); border-radius:4px;}
+  .ft { display:flex; gap:18px; align-items:center; padding:10px 18px; background:#FAFAF8; border-top:1px solid var(--line-1); font-size:12px; color:#6B6B6B;}
+  .ft b { color:#1A1A1A; font-weight:700;}
+</style>
+</head>
+<body>
+  <div class="finding">
+    <div class="hd">
+      <span class="num">ממצא 03</span>
+      <span class="title">חריגה בעובי שכבת בטון רזה ברצפה הטכנית</span>
+      <span class="grow"></span>
+      <span class="badge" style="background:#FBE9E5; color:#C8321F;">● קריטי</span>
+    </div>
+    <div class="body">
+      <div class="desc">
+        <span class="lead">עובי שכבת בטון רזה ברצפה הטכנית בקומה ‎-1 נמדד 4 ס"מ בלבד מול 7 ס"מ במפרט. נדרש פירוק מקומי ויציקה חוזרת בהתאם למפרט, ותיעוד ב-AS-MADE.</span>
+      </div>
+      <div class="photo" aria-label="photo placeholder"></div>
+    </div>
+    <div class="ft">
+      <span>באחריות: <b>אחים לוי בע"מ</b></span>
+      <span>תאריך יעד: <b>21.05.2026</b></span>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,27 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  body { margin:0; padding:20px; background:#fff; }
+  .row { display:flex; gap:14px; align-items:stretch; }
+  .sw { flex:1; min-width:0; border-radius:8px; overflow:hidden; border:1px solid var(--line-1); display:flex; flex-direction:column; }
+  .sw .chip { height:82px; display:flex; align-items:flex-end; padding:10px 12px; color:#fff; font-family:var(--font-mono); font-size:12px; font-weight:600;}
+  .sw .meta { padding:10px 12px; background:#fff; font-family:var(--font-sans); }
+  .sw .name { font-size:13px; font-weight:700; color:var(--fg-1); }
+  .sw .hex  { font-family:var(--font-mono); font-size:11px; color:var(--fg-3); margin-top:2px;}
+  .dark .chip { color:#fff; }
+  .light .chip { color:#1A1A1A; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="sw"><div class="chip" style="background:#8CC63F; color:#1A1A1A;">DIT Green</div><div class="meta"><div class="name">--dit-green</div><div class="hex">#8CC63F · primary</div></div></div>
+    <div class="sw"><div class="chip" style="background:#6FA82B;">Green 700</div><div class="meta"><div class="name">--dit-green-700</div><div class="hex">#6FA82B · hover</div></div></div>
+    <div class="sw"><div class="chip" style="background:#BCDE85; color:#1A1A1A;">Green 300</div><div class="meta"><div class="name">--dit-green-300</div><div class="hex">#BCDE85 · tint</div></div></div>
+    <div class="sw"><div class="chip" style="background:#EDF6DC; color:#1A1A1A;">Green 100</div><div class="meta"><div class="name">--dit-green-100</div><div class="hex">#EDF6DC · soft</div></div></div>
+    <div class="sw"><div class="chip" style="background:#F6FAEC; color:#1A1A1A;">Green 50</div><div class="meta"><div class="name">--dit-green-50</div><div class="hex">#F6FAEC · whisper</div></div></div>
+  </div>
+</body>
+</html>
