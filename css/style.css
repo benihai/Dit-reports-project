@@ -20,7 +20,11 @@
   --radius-sm:    5px;
 }
 
-html { font-size: 16px; }
+html {
+  font-size: 16px;
+  /* Remove 300ms tap delay on mobile — one tap = one click, always */
+  touch-action: manipulation;
+}
 
 body {
   font-family: 'Heebo', 'Arial', sans-serif;
@@ -52,6 +56,7 @@ body {
   object-fit: contain;
   object-position: right center;
   transition: opacity .2s;
+  cursor: pointer;
 }
 
 .btn-icon {
