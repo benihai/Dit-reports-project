@@ -101,7 +101,7 @@ const LogoSearch = (() => {
         }
       };
       img.onerror = () => resolve(imgUrl);
-      img.src = imgUrl;
+      img.src = imgUrl + (imgUrl.includes('?') ? '&' : '?') + '_cors=' + Date.now();
     });
   }
 

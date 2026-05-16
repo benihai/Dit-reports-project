@@ -147,14 +147,13 @@ const PdfExport = (() => {
   // METADATA BLOCK  — 2-column grid with icon + label + value
   // ─────────────────────────────────────────────────────────────────────────────
   function metadataBlockHtml(report, project) {
-    const locationVal = [report.siteName, report.floors].filter(Boolean).join(' · ') || '—';
     const items = [
-      { ic:'tag',      k:'שם הפרויקט',     v: project?.name  || '—' },
-      { ic:'map',      k:'מיקום / אתר',    v: locationVal },
+      { ic:'tag',      k:'שם הפרויקט',     v: project?.name       || '—' },
+      { ic:'map',      k:'קומות / אזורים', v: report.floors       || '—' },
       { ic:'calendar', k:'תאריך הסיור',    v: formatDate(report.date) || '—' },
-      { ic:'user',     k:'מפקח מטעם DIT',  v: report.inspector  || '—' },
+      { ic:'user',     k:'מפקח מטעם DIT',  v: report.inspector    || '—' },
       { ic:'users',    k:'משתתפים נוספים', v: report.participants || '—' },
-      { ic:'check',    k:'מטרת הסיור',     v: report.description || '—' },
+      { ic:'check',    k:'מטרת הסיור',     v: report.description  || '—' },
     ];
 
     const cells = items.map(it => `
@@ -389,10 +388,12 @@ const PdfExport = (() => {
           c.height = img.naturalHeight || 128;
           c.getContext('2d').drawImage(img, 0, 0);
           resolve(c.toDataURL('image/png'));
-        } catch (_) { resolve(url); }
+        } catch (_) { resolve(''); }
       };
-      img.onerror = () => resolve(url);
-      img.src = url;
+      img.onerror = () => resolve('');
+      // Cache-buster forces a fresh CORS-enabled request, bypassing any
+      // cached non-CORS response left by the earlier image-test load.
+      img.src = url + (url.includes('?') ? '&' : '?') + '_cors=' + Date.now();
     });
   }
 
