@@ -4,30 +4,40 @@ const Auth = (() => {
 
   // ── PUBLIC API ──────────────────────────────────────────────────────────────
 
+  // Promise for the currently-in-flight profile load (so _startApp can await it)
+  let _profilePromise = null;
+
   function init(onAuthChange) {
-    // Register listener immediately — Supabase fires INITIAL_SESSION from
-    // localStorage without a network round-trip, so we don't need getSession()
-    // upfront. Removing that blocking call prevents the app from hanging when
-    // the profile query is slow or fails.
-    _supabase.auth.onAuthStateChange(async (event, session) => {
+    _supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
         _currentUser = session.user;
-        // Guard: don't reload profile if it's already set for the same user
+        // Start profile load in background — don't block the auth event.
+        // _startApp() will call ensureProfile() to wait for it.
         if (!_currentProfile || _currentProfile.id !== _currentUser.id) {
-          // 5-second timeout prevents a hung Supabase query from blocking the app forever
-          try {
-            await Promise.race([
-              _loadProfile(),
-              new Promise(resolve => setTimeout(resolve, 5000)),
-            ]);
-          } catch (_) {}
+          _profilePromise = _loadProfile().catch(() => null);
         }
       } else {
         _currentUser    = null;
         _currentProfile = null;
+        _profilePromise = null;
       }
       if (typeof onAuthChange === 'function') onAuthChange(event, session);
     });
+  }
+
+  // Wait for the in-flight profile load to finish (max 8 s).
+  // Called by _startApp() before deciding admin vs viewer routes.
+  async function ensureProfile() {
+    if (_currentProfile) return _currentProfile;
+    if (_profilePromise) {
+      try {
+        await Promise.race([
+          _profilePromise,
+          new Promise(resolve => setTimeout(resolve, 8000)),
+        ]);
+      } catch (_) {}
+    }
+    return _currentProfile;
   }
 
   async function _loadProfile() {
@@ -130,6 +140,7 @@ const Auth = (() => {
 
   return {
     init,
+    ensureProfile,
     login,
     logout,
     getUser,
