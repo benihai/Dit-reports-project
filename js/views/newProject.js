@@ -48,9 +48,12 @@ const NewProjectView = (() => {
           <div class="form-section-title">לוגו של החברה</div>
 
           <div class="form-group">
+            <label>דומיין האתר של החברה (אופציונלי)</label>
             <div style="display:flex;gap:8px;align-items:center;">
+              <input type="text" id="proj-domain" placeholder="לדוגמה: abc.co.il"
+                style="flex:1;" oninput="NewProjectView.onDomainInput(this.value)">
               <button type="button" class="btn btn-outline btn-sm" id="logo-search-btn"
-                onclick="NewProjectView.searchLogo()">🔍 חפש לוגו לפי שם החברה</button>
+                onclick="NewProjectView.searchLogo()">🔍 חפש לוגו</button>
             </div>
             <div id="logo-status" style="margin-top:8px;"></div>
           </div>
@@ -90,20 +93,33 @@ const NewProjectView = (() => {
 
   function onClientInput(val) {
     clearTimeout(_debounceTimer);
+    if (val.trim().length >= 2) {
+      _debounceTimer = setTimeout(() => _searchLogoSilent(), 1400);
+    }
+  }
+
+  function onDomainInput(val) {
+    clearTimeout(_debounceTimer);
     if (val.trim().length >= 3) {
-      _debounceTimer = setTimeout(() => _searchLogoSilent(val), 1400);
+      _debounceTimer = setTimeout(() => _searchLogoSilent(), 1000);
     }
   }
 
   // Auto-search triggered by typing — silent (no toast on failure)
-  async function _searchLogoSilent(company) {
-    if (_searching || _logoData || !company.trim()) return;
+  async function _searchLogoSilent() {
+    if (_searching || _logoData) return;
+    const company = document.getElementById('proj-client')?.value.trim() || '';
+    const domain  = document.getElementById('proj-domain')?.value.trim()  || '';
+    if (!company && !domain) return;
+
     _searching = true;
     const statusEl = document.getElementById('logo-status');
-    if (statusEl) statusEl.innerHTML = `<div class="logo-searching"><span class="spinner"></span>מחפש לוגו...</div>`;
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--text-light);font-size:.85rem;">מחפש לוגו...</span>`;
 
     try {
-      const url = await LogoSearch.searchByName(company);
+      // Domain is most reliable — try it first
+      let url = domain ? await LogoSearch.searchByDomain(domain) : null;
+      if (!url && company) url = await LogoSearch.searchByName(company);
       if (url) {
         const data = await LogoSearch.toDataUrl(url);
         setLogo(data);
@@ -122,27 +138,29 @@ const NewProjectView = (() => {
   // Manual search triggered by button click
   async function searchLogo() {
     if (_searching) return;
-    const company = document.getElementById('proj-client')?.value.trim();
-    if (!company) { App.toast('הזן שם חברה תחילה'); return; }
+    const company = document.getElementById('proj-client')?.value.trim() || '';
+    const domain  = document.getElementById('proj-domain')?.value.trim()  || '';
+    if (!company && !domain) { App.toast('הזן שם חברה או דומיין'); return; }
 
     _searching = true;
     const btn      = document.getElementById('logo-search-btn');
     const statusEl = document.getElementById('logo-status');
-    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> מחפש...'; }
+    if (btn) { btn.disabled = true; btn.textContent = 'מחפש...'; }
     if (statusEl) statusEl.innerHTML = '';
 
     try {
-      const url = await LogoSearch.searchByName(company);
+      let url = domain ? await LogoSearch.searchByDomain(domain) : null;
+      if (!url && company) url = await LogoSearch.searchByName(company);
       if (url) {
         const data = await LogoSearch.toDataUrl(url);
         setLogo(data);
         App.toast('לוגו נמצא!');
       } else {
-        App.toast('לא נמצא לוגו — נסה להעלות ידנית');
+        App.toast('לא נמצא לוגו — הזן דומיין אתר החברה (לדוגמה: abc.co.il) או העלה ידנית');
       }
     } finally {
       _searching = false;
-      if (btn) { btn.disabled = false; btn.innerHTML = '🔍 חפש לוגו לפי שם החברה'; }
+      if (btn) { btn.disabled = false; btn.textContent = '🔍 חפש לוגו'; }
     }
   }
 
@@ -202,5 +220,5 @@ const NewProjectView = (() => {
     }
   }
 
-  return { render, onClientInput, searchLogo, handleLogoUpload, clearLogo, submit };
+  return { render, onClientInput, onDomainInput, searchLogo, handleLogoUpload, clearLogo, submit };
 })();

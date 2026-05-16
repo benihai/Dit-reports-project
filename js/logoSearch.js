@@ -1,6 +1,27 @@
 const LogoSearch = (() => {
 
-  // ── Clearbit Autocomplete — free, no API key, works with company names ────────
+  // ── Search by explicit domain ─────────────────────────────────────────────
+  async function searchByDomain(domain) {
+    if (!domain?.trim()) return null;
+    const d = domain.trim().toLowerCase()
+      .replace(/^https?:\/\//, '')
+      .replace(/^www\./, '')
+      .split('/')[0];
+    if (!d || !d.includes('.')) return null;
+
+    const candidates = [
+      `https://logo.clearbit.com/${d}`,
+      `https://www.google.com/s2/favicons?domain=${d}&sz=256`,
+      `https://icons.duckduckgo.com/ip3/${d}.ico`,
+    ];
+    for (const url of candidates) {
+      const result = await _testImage(url);
+      if (result) return result;
+    }
+    return null;
+  }
+
+  // ── Search by company name (name → Clearbit autocomplete → domain fallback) ──
   async function searchByName(query) {
     if (!query?.trim()) return null;
 
@@ -15,17 +36,33 @@ const LogoSearch = (() => {
       clearTimeout(tid);
       if (res.ok) {
         const list = await res.json();
-        if (Array.isArray(list) && list.length > 0 && list[0].logo) {
-          return list[0].logo;
+        if (Array.isArray(list) && list.length > 0) {
+          // Try the logo URL from the first result
+          if (list[0].logo) {
+            const ok = await _testImage(list[0].logo);
+            if (ok) return ok;
+          }
+          // Fallback: use the domain from the result
+          if (list[0].domain) {
+            const r = await searchByDomain(list[0].domain);
+            if (r) return r;
+          }
         }
       }
     } catch (_) {}
 
-    // 2. Fall back to domain-guessing approach
-    return _searchByDomain(query);
+    // 2. Guess a domain from the company name (works for English names)
+    const guessed = _guessDomain(query);
+    if (guessed) {
+      const r = await searchByDomain(guessed);
+      if (r) return r;
+    }
+
+    return null;
   }
 
-  // ── Domain-guess fallback ─────────────────────────────────────────────────────
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
   function _testImage(url, timeout = 5000) {
     return new Promise(resolve => {
       const img = new Image();
@@ -37,44 +74,16 @@ const LogoSearch = (() => {
     });
   }
 
-  function _toCandidateUrls(query) {
-    const isHebrew = /[א-ת]/.test(query);
-    const urls = [];
-
-    if (!isHebrew && query.includes('.')) {
-      const domain = query.trim().toLowerCase();
-      urls.push(
-        `https://logo.clearbit.com/${domain}`,
-        `https://www.google.com/s2/favicons?domain=${domain}&sz=128`
-      );
-    } else {
-      const clean = query.trim()
-        .toLowerCase()
-        .replace(/[א-תיִ-פֿ]+/g, '')
-        .replace(/\s+(ltd|inc|corp|llc|group|בעמ|בע"מ)/gi, '')
-        .trim()
-        .replace(/\s+/g, '-')
-        .replace(/[^a-z0-9\-]/g, '')
-        .replace(/^-+|-+$/g, '');
-
-      if (clean) {
-        urls.push(
-          `https://logo.clearbit.com/${clean}.com`,
-          `https://logo.clearbit.com/${clean}.co.il`,
-          `https://www.google.com/s2/favicons?domain=${clean}.com&sz=128`
-        );
-      }
-    }
-    return urls;
-  }
-
-  async function _searchByDomain(query) {
-    const candidates = _toCandidateUrls(query);
-    for (const url of candidates) {
-      const result = await _testImage(url);
-      if (result) return result;
-    }
-    return null;
+  function _guessDomain(query) {
+    const clean = query.trim()
+      .toLowerCase()
+      .replace(/[א-תיִ-פְֿ-ׇ]+/g, '') // strip Hebrew
+      .replace(/\s+(ltd|inc|corp|llc|group|בעמ|בע"מ)/gi, '')
+      .trim()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9\-]/g, '')
+      .replace(/^-+|-+$/g, '');
+    return clean ? clean + '.com' : null;
   }
 
   async function toDataUrl(imgUrl) {
@@ -97,5 +106,5 @@ const LogoSearch = (() => {
     });
   }
 
-  return { searchByName, toDataUrl };
+  return { searchByName, searchByDomain, toDataUrl };
 })();
