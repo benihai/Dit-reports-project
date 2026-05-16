@@ -1,4 +1,4 @@
-const CACHE = 'dit-v18';
+const CACHE = 'dit-v19';
 
 const SHELL = [
   './',

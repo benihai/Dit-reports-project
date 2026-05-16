@@ -399,7 +399,7 @@ const PdfExport = (() => {
 
   async function buildHtml(report, notes, project) {
     _currentReport = report;
-    const clientLogoSrc = await _toDataUrl(project?.logoData || '');
+    const clientLogoSrc = project?.logoData || '';
     const clientName    = project?.clientName || project?.name || '';
 
     // findings section
@@ -517,12 +517,24 @@ const PdfExport = (() => {
   // ─────────────────────────────────────────────────────────────────────────────
   // GENERATE PDF  (html2canvas → jsPDF slicing)
   // ─────────────────────────────────────────────────────────────────────────────
+  async function _inlineExternalImages(container) {
+    const imgs = Array.from(container.querySelectorAll('img[src]'));
+    await Promise.all(imgs.map(async img => {
+      const src = img.getAttribute('src');
+      if (src && !src.startsWith('data:') && !src.startsWith('blob:')) {
+        const dataUrl = await _toDataUrl(src);
+        if (dataUrl) img.src = dataUrl;
+      }
+    }));
+  }
+
   async function generate(report, notes, project, prebuiltHtml = null) {
     await _ensureLibs();
     const html = prebuiltHtml || await buildHtml(report, notes, project);
 
     const container = document.getElementById('pdf-template');
     container.innerHTML = html;
+    await _inlineExternalImages(container);
     await waitForImages(container);
 
     const canvas = await html2canvas(container, {
