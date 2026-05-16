@@ -169,21 +169,16 @@ const App = (() => {
 
     showLoading('טוען...');
 
-    try {
-      await Auth.init(_onAuthChange);
-      // Auth state is handled by _onAuthChange callback above.
-      // The INITIAL_SESSION event will fire and show login or app.
-      // Add a fallback timeout in case no event fires.
-      setTimeout(() => {
-        if (document.getElementById('view-container')?.querySelector('[style*="טוען"]') ||
-            document.querySelector('.loading-overlay')) {
-          hideLoading();
-          LoginView.render();
-        }
-      }, 5000);
-    } catch (err) {
-      _showError(err.message || 'שגיאת חיבור — בדוק אינטרנט ורענן');
-    }
+    Auth.init(_onAuthChange);
+
+    // Fallback: if INITIAL_SESSION never fires (Supabase unreachable or profile
+    // query hangs), show LoginView after 8 seconds instead of freezing forever.
+    setTimeout(() => {
+      if (!_appStarted) {
+        hideLoading();
+        LoginView.render();
+      }
+    }, 8000);
   }
 
   return { setHeader, goBack, toast, confirm, showLoading, hideLoading, init };
