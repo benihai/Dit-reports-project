@@ -88,7 +88,6 @@ const ReportView = (() => {
     return `
       <table class="info-table">
         <tr><td>תיאור הסיור</td><td>${escHtml(r.description || '—')}</td></tr>
-        <tr><td>אתר / שם הפרויקט</td><td>${escHtml(r.siteName || '—')}</td></tr>
         <tr><td>קומות / אזורים</td><td>${escHtml(r.floors || '—')}</td></tr>
         <tr><td>תאריך</td><td>${formatDate(r.date) || '—'}</td></tr>
         <tr><td>מבצע הסיור מטעם DIT</td><td>${escHtml(r.inspector || '—')}</td></tr>
@@ -104,15 +103,9 @@ const ReportView = (() => {
         <label>תיאור הסיור</label>
         <textarea id="edit-description" rows="3">${escHtml(r.description || '')}</textarea>
       </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>אתר / שם הפרויקט</label>
-          <input type="text" id="edit-sitename" value="${escHtml(r.siteName || '')}">
-        </div>
-        <div class="form-group">
-          <label>קומות / אזורים</label>
-          <input type="text" id="edit-floors" placeholder="קומה 3, גג" value="${escHtml(r.floors || '')}">
-        </div>
+      <div class="form-group">
+        <label>קומות / אזורים</label>
+        <input type="text" id="edit-floors" placeholder="קומה 3, גג" value="${escHtml(r.floors || '')}">
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -155,7 +148,6 @@ const ReportView = (() => {
   async function saveHeader() {
     const report = await Storage.Reports.get(_reportId);
     report.description  = document.getElementById('edit-description')?.value.trim()  || '';
-    report.siteName     = document.getElementById('edit-sitename')?.value.trim()      || '';
     report.floors       = document.getElementById('edit-floors')?.value.trim()        || '';
     report.date         = document.getElementById('edit-date')?.value                 || '';
     report.inspector    = document.getElementById('edit-inspector')?.value.trim()     || '';

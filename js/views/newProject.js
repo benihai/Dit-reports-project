@@ -38,8 +38,8 @@ const NewProjectView = (() => {
           </div>
 
           <div class="form-group">
-            <label>שם החברה <span class="required">*</span></label>
-            <input type="text" id="proj-client" placeholder="לדוגמה: קבוצת ABC" required
+            <label>שם חברת פיקוח <span class="required">*</span></label>
+            <input type="text" id="proj-client" placeholder="לדוגמה: DIT פיקוח" required
               oninput="NewProjectView.onClientInput(this.value)">
           </div>
         </div>
@@ -197,7 +197,7 @@ const NewProjectView = (() => {
     const clientName = document.getElementById('proj-client').value.trim();
 
     if (!name)       { App.toast('נא להזין שם פרויקט'); return; }
-    if (!clientName) { App.toast('נא להזין שם חברה'); return; }
+    if (!clientName) { App.toast('נא להזין שם חברת פיקוח'); return; }
 
     const project = {
       id: Storage.generateId(),
