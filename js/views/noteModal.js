@@ -2,10 +2,10 @@ const NoteModal = (() => {
   let _reportId    = null;
   let _projectId   = null;
   let _noteId      = null;
-  let _mediaItems  = [];     // [{ type, data, name }]
-  let _planMarkups = [];     // [{ planId, planName, imageData }]
+  let _mediaItems  = [];
+  let _planMarkups = [];
   let _onSave      = null;
-  let _projectPlans = [];    // available plans from project library
+  let _projectPlans = [];
 
   function escHtml(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -78,25 +78,32 @@ const NoteModal = (() => {
     _mediaItems  = [];
     _planMarkups = [];
 
+    // Declare note outside try so it's accessible when building the HTML below
+    let note = null;
+
     App.showLoading('טוען...');
     try {
       const report = await Storage.Reports.get(reportId);
       _projectId   = report?.projectId || null;
 
       // Fetch note and plans in parallel
-      const [note, plans] = await Promise.all([
+      const [fetchedNote, plans] = await Promise.all([
         noteId ? Storage.Notes.get(noteId) : Promise.resolve(null),
         _projectId ? Storage.Plans.getForProject(_projectId) : Promise.resolve([]),
       ]);
 
+      note = fetchedNote;
       if (note) {
         _mediaItems  = note.mediaItems  ? [...note.mediaItems]  : [];
         _planMarkups = note.planMarkups ? [...note.planMarkups] : [];
       }
       _projectPlans = plans;
-    } finally {
+    } catch (err) {
+      App.toast('שגיאה בטעינת הממצא');
       App.hideLoading();
+      return;
     }
+    App.hideLoading();
 
     let overlay = document.getElementById('note-modal-overlay');
     if (!overlay) {
@@ -199,7 +206,7 @@ const NoteModal = (() => {
         canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
         resolve(canvas.toDataURL('image/jpeg', 0.72));
       };
-      img.onerror = () => resolve(dataUrl);  // fallback: keep original
+      img.onerror = () => resolve(dataUrl);
       img.src = dataUrl;
     });
   }
@@ -245,7 +252,6 @@ const NoteModal = (() => {
     const plan = _projectPlans.find(p => p.id === planId);
     if (!plan) return;
 
-    // Fullscreen + Landscape — חייב להיקרא מ-user gesture
     if (document.documentElement.requestFullscreen) {
       document.documentElement.requestFullscreen().catch(() => {});
     } else if (document.documentElement.webkitRequestFullscreen) {
@@ -276,28 +282,35 @@ const NoteModal = (() => {
     const description = document.getElementById('note-description').value.trim();
     if (!description) { App.toast('נא לתאר את הממצא'); return; }
 
-    const allNotes  = await Storage.Notes.getForReport(_reportId);
-    const noteNumber = _noteId
-      ? (allNotes.findIndex(n => n.id === _noteId) + 1 || allNotes.length)
-      : allNotes.length + 1;
+    App.showLoading('שומר...');
+    try {
+      const allNotes = await Storage.Notes.getForReport(_reportId);
+      const noteNumber = _noteId
+        ? (allNotes.findIndex(n => n.id === _noteId) + 1 || allNotes.length)
+        : allNotes.length + 1;
 
-    const note = {
-      id:          _noteId || Storage.generateId(),
-      reportId:    _reportId,
-      noteNumber,
-      floor:       document.getElementById('note-floor').value.trim(),
-      area:        document.getElementById('note-area').value.trim(),
-      description,
-      responsible: document.getElementById('note-responsible').value.trim(),
-      mediaItems:  _mediaItems,
-      planMarkups: _planMarkups,
-      createdAt:   _noteId ? (allNotes.find(n => n.id === _noteId)?.createdAt ?? Date.now()) : Date.now(),
-    };
+      const note = {
+        id:          _noteId || Storage.generateId(),
+        reportId:    _reportId,
+        noteNumber,
+        floor:       document.getElementById('note-floor').value.trim(),
+        area:        document.getElementById('note-area').value.trim(),
+        description,
+        responsible: document.getElementById('note-responsible').value.trim(),
+        mediaItems:  _mediaItems,
+        planMarkups: _planMarkups,
+        createdAt:   _noteId ? (allNotes.find(n => n.id === _noteId)?.createdAt ?? Date.now()) : Date.now(),
+      };
 
-    await Storage.Notes.save(note);
-    close();
-    App.toast(_noteId ? 'ממצא עודכן' : 'ממצא נוסף');
-    if (_onSave) _onSave();
+      await Storage.Notes.save(note);
+      close();
+      App.toast(_noteId ? 'ממצא עודכן' : 'ממצא נוסף');
+      if (_onSave) _onSave();
+    } catch (err) {
+      App.toast('שגיאה בשמירת הממצא');
+    } finally {
+      App.hideLoading();
+    }
   }
 
   function close() {
