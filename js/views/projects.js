@@ -116,7 +116,7 @@ const ProjectsView = (() => {
           <input type="text" id="ep-name" value="${escHtml(project.name)}">
         </div>
         <div class="form-group">
-          <label>שם החברה / לקוח</label>
+          <label>שם חברת פיקוח</label>
           <input type="text" id="ep-client" value="${escHtml(project.clientName || '')}">
         </div>
         <div class="form-group">
