@@ -1,25 +1,2 @@
-name: Deploy Staging to GitHub Pages
-
-on:
-  push:
-    branches: [ staging ]
-  workflow_dispatch:
-
-permissions:
-  contents: write
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Deploy to gh-pages (staging subfolder)
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: .
-          destination_dir: staging
-          keep_files: true
-          commit_message: "Staging deploy — ${{ github.sha }}"
+# Staging deploys are handled by pages.yml
+# (triggers on push to both main and staging branches)
