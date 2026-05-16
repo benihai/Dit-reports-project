@@ -377,9 +377,28 @@ const PdfExport = (() => {
   // We need reportNumber accessible inside findingCardHtml, so keep a module ref
   let _currentReport = null;
 
+  function _toDataUrl(url) {
+    if (!url || url.startsWith('data:')) return Promise.resolve(url);
+    return new Promise(resolve => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const c = document.createElement('canvas');
+          c.width = img.naturalWidth || 128;
+          c.height = img.naturalHeight || 128;
+          c.getContext('2d').drawImage(img, 0, 0);
+          resolve(c.toDataURL('image/png'));
+        } catch (_) { resolve(url); }
+      };
+      img.onerror = () => resolve(url);
+      img.src = url;
+    });
+  }
+
   async function buildHtml(report, notes, project) {
     _currentReport = report;
-    const clientLogoSrc = project?.logoData || '';
+    const clientLogoSrc = await _toDataUrl(project?.logoData || '');
     const clientName    = project?.clientName || project?.name || '';
 
     // findings section
