@@ -525,7 +525,7 @@ const PdfExport = (() => {
     const PAGE_H = Math.round(297 * 794 / 210); // ≈ 1123px
     const cards = Array.from(container.querySelectorAll('[data-finding-card]'));
     for (const card of cards) {
-      // force reflow to get updated positions after any prior margin changes
+      // Force reflow so positions reflect any spacers inserted for earlier cards
       void container.offsetHeight;
       const containerRect = container.getBoundingClientRect();
       const cardRect = card.getBoundingClientRect();
@@ -534,9 +534,11 @@ const PdfExport = (() => {
       const pStart = Math.floor(top / PAGE_H);
       const pEnd   = Math.floor((bot - 1) / PAGE_H);
       if (pStart !== pEnd && cardRect.height < PAGE_H) {
-        const nextPage = (pStart + 1) * PAGE_H;
-        const cur = parseFloat(card.style.marginTop) || 0;
-        card.style.marginTop = `${cur + (nextPage - top)}px`;
+        // Use a height spacer (not margin-top) — margins collapse, height never does
+        const push = (pStart + 1) * PAGE_H - top;
+        const spacer = document.createElement('div');
+        spacer.style.height = `${push}px`;
+        card.parentNode.insertBefore(spacer, card);
       }
     }
   }
