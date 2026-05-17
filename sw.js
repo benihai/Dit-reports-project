@@ -1,4 +1,4 @@
-const CACHE = 'dit-v8';
+const CACHE = 'dit-v22';
 
 const SHELL = [
   './',
@@ -53,7 +53,8 @@ self.addEventListener('fetch', e => {
 
   e.respondWith(
     caches.match(e.request).then(cached => {
-      // Stale-while-revalidate: serve cache immediately, update in background
+      // Stale-while-revalidate: serve cache immediately, update in background.
+      // If fetch fails, fall back to cached index.html (app shell).
       const network = fetch(e.request)
         .then(res => {
           if (res && res.status === 200) {
@@ -62,9 +63,12 @@ self.addEventListener('fetch', e => {
           }
           return res;
         })
-        .catch(() => null);
+        .catch(() =>
+          caches.match('./index.html')
+            .then(r => r || new Response('Offline', { status: 503, statusText: 'Offline' }))
+        );
 
-      return cached || network || caches.match('./index.html');
+      return cached || network;
     })
   );
 });

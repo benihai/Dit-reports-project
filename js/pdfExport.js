@@ -95,7 +95,7 @@ const PdfExport = (() => {
   // ─────────────────────────────────────────────────────────────────────────────
   function reportHeaderHtml(clientLogoSrc, clientName, report) {
     const clientSlot = clientLogoSrc
-      ? `<img src="${clientLogoSrc}" alt="${esc(clientName)}"
+      ? `<img src="${clientLogoSrc}" alt="${esc(clientName)}" data-inline-logo="1"
            style="height:60px;width:auto;max-width:140px;object-fit:contain;display:block;">`
       : `<div style="width:130px;height:68px;
               border:1.5px dashed #BFBFBF;border-radius:6px;
@@ -147,14 +147,13 @@ const PdfExport = (() => {
   // METADATA BLOCK  — 2-column grid with icon + label + value
   // ─────────────────────────────────────────────────────────────────────────────
   function metadataBlockHtml(report, project) {
-    const locationVal = [report.siteName, report.floors].filter(Boolean).join(' · ') || '—';
     const items = [
-      { ic:'tag',      k:'שם הפרויקט',     v: project?.name  || '—' },
-      { ic:'map',      k:'מיקום / אתר',    v: locationVal },
+      { ic:'tag',      k:'שם הפרויקט',     v: project?.name       || '—' },
+      { ic:'map',      k:'קומות / אזורים', v: report.floors       || '—' },
       { ic:'calendar', k:'תאריך הסיור',    v: formatDate(report.date) || '—' },
-      { ic:'user',     k:'מפקח מטעם DIT',  v: report.inspector  || '—' },
+      { ic:'user',     k:'מפקח מטעם DIT',  v: report.inspector    || '—' },
       { ic:'users',    k:'משתתפים נוספים', v: report.participants || '—' },
-      { ic:'check',    k:'מטרת הסיור',     v: report.description || '—' },
+      { ic:'check',    k:'מטרת הסיור',     v: report.description  || '—' },
     ];
 
     const cells = items.map(it => `
@@ -264,14 +263,15 @@ const PdfExport = (() => {
     const hasExtra = extraHtml || markupsHtml || videoHtml;
 
     // ── footer items ──
-    const footerParts = [];
-    if (note.responsible)
-      footerParts.push(`<span>באחריות: <b style="color:#1A1A1A;">${esc(note.responsible)}</b></span>`);
+    const responsibleHtml = note.responsible
+      ? `<span style="font-family:Arial,sans-serif;font-size:12px;color:#6B6B6B;">באחריות: <b style="color:#1A1A1A;">${esc(note.responsible)}</b></span>`
+      : `<span></span>`;
     const ref = `FIND-${String(_currentReport?.reportNumber||0).padStart(3,'0')}-${num}`;
-    footerParts.push(`<span style="font-family:monospace;font-size:11px;">${ref}</span>`);
+    const refHtml = `<span style="font-family:monospace;font-size:12px;color:#6B6B6B;">${ref}</span>`;
 
     return `
-      <article style="background:#fff;border:1px solid #E6E6E2;border-radius:8px;
+      <article data-finding-card="1"
+               style="background:#fff;border:1px solid #E6E6E2;border-radius:8px;
                       box-shadow:0 1px 2px rgba(26,26,26,.06);overflow:hidden;
                       margin-bottom:24px;page-break-inside:avoid;">
 
@@ -282,8 +282,9 @@ const PdfExport = (() => {
                        background:#1A1A1A;color:#fff;padding:4px 12px;
                        border-radius:999px;letter-spacing:.04em;
                        white-space:nowrap;flex-shrink:0;">ממצא ${num}</span>
-          <h3 style="margin:0;font-family:'Heebo',Arial,sans-serif;font-weight:700;
-                     font-size:18px;color:#1A1A1A;flex:1;line-height:1.3;">
+          <h3 style="margin:0;font-family:'Heebo',Arial,sans-serif;font-weight:800;
+                     font-size:15px;color:#1A1A1A;flex:1;line-height:1.3;
+                     direction:rtl;text-align:right;">
             ${esc(title)}
           </h3>
         </div>
@@ -292,8 +293,9 @@ const PdfExport = (() => {
         <div style="display:grid;
                     grid-template-columns:${firstPhoto ? '1.5fr 1fr' : '1fr'};
                     gap:18px;padding:16px 18px;">
-          <div style="font-family:'Heebo',Arial,sans-serif;font-size:14px;
-                      color:#3A3A3A;line-height:1.65;white-space:pre-wrap;">
+          <div style="font-family:'Heebo',Arial,sans-serif;font-size:13px;
+                      color:#3A3A3A;line-height:1.65;white-space:pre-wrap;
+                      direction:rtl;text-align:right;">
             ${esc(note.description)}
           </div>
           ${photoHtml}
@@ -302,11 +304,11 @@ const PdfExport = (() => {
         ${hasExtra ? `<div style="padding:0 18px 14px;">${extraHtml}${markupsHtml}${videoHtml}</div>` : ''}
 
         <!-- Card footer -->
-        <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;
+        <div style="display:flex;justify-content:space-between;align-items:center;
                     padding:12px 18px;background:#FAFAF8;
-                    border-top:1px solid #E6E6E2;
-                    font-family:Arial,sans-serif;font-size:13px;color:#6B6B6B;">
-          ${footerParts.join(`<span style="color:#D1D1CC;">·</span>`)}
+                    border-top:1px solid #E6E6E2;">
+          ${responsibleHtml}
+          ${refHtml}
         </div>
       </article>`;
   }
@@ -376,6 +378,27 @@ const PdfExport = (() => {
   // ─────────────────────────────────────────────────────────────────────────────
   // We need reportNumber accessible inside findingCardHtml, so keep a module ref
   let _currentReport = null;
+
+  function _toDataUrl(url) {
+    if (!url || url.startsWith('data:')) return Promise.resolve(url);
+    return new Promise(resolve => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const c = document.createElement('canvas');
+          c.width = img.naturalWidth || 128;
+          c.height = img.naturalHeight || 128;
+          c.getContext('2d').drawImage(img, 0, 0);
+          resolve(c.toDataURL('image/png'));
+        } catch (_) { resolve(''); }
+      };
+      img.onerror = () => resolve('');
+      // Cache-buster forces a fresh CORS-enabled request, bypassing any
+      // cached non-CORS response left by the earlier image-test load.
+      img.src = url + (url.includes('?') ? '&' : '?') + '_cors=' + Date.now();
+    });
+  }
 
   async function buildHtml(report, notes, project) {
     _currentReport = report;
@@ -495,15 +518,76 @@ const PdfExport = (() => {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // AVOID PAGE BREAKS — push cards that straddle a page boundary to next page
+  // ─────────────────────────────────────────────────────────────────────────────
+  function _avoidPageBreaks(container) {
+    // A4 page height in DOM pixels (container is 794px wide = 210mm)
+    const PAGE_H = Math.round(297 * 794 / 210); // ≈ 1123px
+    const cards = Array.from(container.querySelectorAll('[data-finding-card]'));
+    for (const card of cards) {
+      // Force reflow so positions reflect any spacers inserted for earlier cards
+      void container.offsetHeight;
+      const containerRect = container.getBoundingClientRect();
+      const cardRect = card.getBoundingClientRect();
+      const top = cardRect.top - containerRect.top;
+      const bot = cardRect.bottom - containerRect.top;
+      const pStart = Math.floor(top / PAGE_H);
+      const pEnd   = Math.floor((bot - 1) / PAGE_H);
+      if (pStart !== pEnd && cardRect.height < PAGE_H) {
+        // Use a height spacer (not margin-top) — margins collapse, height never does
+        const push = (pStart + 1) * PAGE_H - top;
+        const spacer = document.createElement('div');
+        spacer.style.height = `${push}px`;
+        card.parentNode.insertBefore(spacer, card);
+      }
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // GENERATE PDF  (html2canvas → jsPDF slicing)
   // ─────────────────────────────────────────────────────────────────────────────
+  // Replace the client logo <img> with a <canvas> so html2canvas can render it
+  // without hitting CORS restrictions (canvas elements are rendered natively).
+  async function _inlineExternalImages(container) {
+    const logoImg = container.querySelector('img[data-inline-logo]');
+    if (!logoImg) return;
+
+    const src = logoImg.getAttribute('src') || '';
+    // Try to get a data URL — cache-buster bypasses any cached non-CORS response.
+    const dataUrl = src.startsWith('data:')
+      ? src
+      : await _toDataUrl(src);
+    if (!dataUrl) return;
+
+    await new Promise(resolve => {
+      const image = new Image();
+      image.onload = () => {
+        try {
+          const c = document.createElement('canvas');
+          c.width  = image.naturalWidth  || 128;
+          c.height = image.naturalHeight || 128;
+          c.style.cssText = logoImg.style.cssText; // preserve layout styles
+          c.getContext('2d').drawImage(image, 0, 0);
+          logoImg.parentNode?.replaceChild(c, logoImg);
+        } catch (_) {}
+        resolve();
+      };
+      image.onerror = () => resolve();
+      image.src = dataUrl;
+    });
+  }
+
   async function generate(report, notes, project, prebuiltHtml = null) {
     await _ensureLibs();
     const html = prebuiltHtml || await buildHtml(report, notes, project);
 
     const container = document.getElementById('pdf-template');
     container.innerHTML = html;
+    await _inlineExternalImages(container);
     await waitForImages(container);
+    _avoidPageBreaks(container);
+    // Wait for fonts to be ready before html2canvas
+    await document.fonts.ready.catch(() => {});
 
     const canvas = await html2canvas(container, {
       scale:           1.5,   // was 2 (4× pixels); 1.5 reduces processing ~44% at still-sharp quality
