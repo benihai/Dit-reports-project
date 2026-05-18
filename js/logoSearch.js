@@ -88,21 +88,26 @@ const LogoSearch = (() => {
   async function toDataUrl(imgUrl) {
     if (!imgUrl) return imgUrl;
     if (imgUrl.startsWith('data:')) return imgUrl;
-    // Try fetch with CORS (works for Clearbit and similar services)
-    try {
-      const resp = await fetch(imgUrl, { mode: 'cors' });
-      if (resp.ok) {
-        const blob = await resp.blob();
-        return await new Promise(resolve => {
-          const reader = new FileReader();
-          reader.onload  = () => resolve(reader.result);
-          reader.onerror = () => resolve(imgUrl);
-          reader.readAsDataURL(blob);
-        });
-      }
-    } catch (_) {}
-    // Return URL as fallback so the image still shows in the browser preview
-    return imgUrl;
+    // Use a cache-buster URL for the CORS attempt so the ORIGINAL url is never
+    // marked as CORS-failed in the browser cache — that way img.src = imgUrl still
+    // displays the image even when conversion to data URL fails.
+    return new Promise(resolve => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const c = document.createElement('canvas');
+          c.width  = img.naturalWidth  || 128;
+          c.height = img.naturalHeight || 128;
+          c.getContext('2d').drawImage(img, 0, 0);
+          resolve(c.toDataURL('image/png'));
+        } catch (_) {
+          resolve(imgUrl); // canvas tainted — fall back to URL for display
+        }
+      };
+      img.onerror = () => resolve(imgUrl); // CORS blocked — URL still shows in <img>
+      img.src = imgUrl + (imgUrl.includes('?') ? '&' : '?') + '_cors=' + Date.now();
+    });
   }
 
   return { searchByName, searchByDomain, toDataUrl };
