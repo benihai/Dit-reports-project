@@ -85,38 +85,33 @@ const LogoSearch = (() => {
     return clean ? clean + '.com' : null;
   }
 
-  async function toDataUrl(imgUrl) {
-    if (!imgUrl) return null;
-    if (imgUrl.startsWith('data:')) return imgUrl;
-    // Try fetch first — works for services with Access-Control-Allow-Origin: *
-    try {
-      const resp = await fetch(imgUrl, { mode: 'cors' });
-      if (resp.ok) {
-        const blob = await resp.blob();
-        return await new Promise(resolve => {
-          const reader = new FileReader();
-          reader.onload  = () => resolve(reader.result);
-          reader.onerror = () => resolve(null);
-          reader.readAsDataURL(blob);
-        });
-      }
-    } catch (_) {}
-    // Canvas fallback
-    return new Promise(resolve => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        try {
-          const canvas = document.createElement('canvas');
-          canvas.width  = img.naturalWidth  || 128;
-          canvas.height = img.naturalHeight || 128;
-          canvas.getContext('2d').drawImage(img, 0, 0);
-          resolve(canvas.toDataURL('image/png'));
-        } catch (_) { resolve(imgUrl); }  // tainted canvas — return URL as fallback
-      };
-      img.onerror = () => resolve(imgUrl);  // fallback: store URL so preview still shows
-      img.src = imgUrl + (imgUrl.includes('?') ? '&' : '?') + '_cors=' + Date.now();
+  async function _fetchAsDataUrl(url) {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(resp.status);
+    const blob = await resp.blob();
+    return new Promise((res, rej) => {
+      const reader = new FileReader();
+      reader.onload  = () => res(reader.result);
+      reader.onerror = () => rej();
+      reader.readAsDataURL(blob);
     });
+  }
+
+  async function toDataUrl(imgUrl) {
+    if (!imgUrl) return imgUrl;
+    if (imgUrl.startsWith('data:')) return imgUrl;
+    // 1. Netlify proxy — no CORS restrictions, works for any logo service
+    try {
+      const r = await _fetchAsDataUrl(`/.netlify/functions/logo-proxy?url=${encodeURIComponent(imgUrl)}`);
+      if (r) return r;
+    } catch (_) {}
+    // 2. Direct fetch (works for services that allow CORS)
+    try {
+      const r = await _fetchAsDataUrl(imgUrl);
+      if (r) return r;
+    } catch (_) {}
+    // 3. Return URL as fallback so image still shows in browser preview
+    return imgUrl;
   }
 
   return { searchByName, searchByDomain, toDataUrl };

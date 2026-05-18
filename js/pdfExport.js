@@ -370,22 +370,31 @@ const PdfExport = (() => {
   // We need reportNumber accessible inside findingCardHtml, so keep a module ref
   let _currentReport = null;
 
+  async function _fetchBlob(url) {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(resp.status);
+    const blob = await resp.blob();
+    return new Promise((res, rej) => {
+      const reader = new FileReader();
+      reader.onload  = () => res(reader.result);
+      reader.onerror = () => rej();
+      reader.readAsDataURL(blob);
+    });
+  }
+
   async function _toDataUrl(url) {
     if (!url || url.startsWith('data:')) return url;
-    // 1. Try fetch — works when server sends Access-Control-Allow-Origin: *
+    // 1. Netlify proxy — server-side fetch bypasses all CORS restrictions
     try {
-      const resp = await fetch(url, { mode: 'cors' });
-      if (resp.ok) {
-        const blob = await resp.blob();
-        return await new Promise(resolve => {
-          const reader = new FileReader();
-          reader.onload  = () => resolve(reader.result);
-          reader.onerror = () => resolve('');
-          reader.readAsDataURL(blob);
-        });
-      }
+      const r = await _fetchBlob(`/.netlify/functions/logo-proxy?url=${encodeURIComponent(url)}`);
+      if (r) return r;
     } catch (_) {}
-    // 2. Canvas fallback — works if browser's cache-buster avoids the tainted-canvas problem
+    // 2. Direct CORS fetch (works for Clearbit, which sends Access-Control-Allow-Origin: *)
+    try {
+      const r = await _fetchBlob(url);
+      if (r) return r;
+    } catch (_) {}
+    // 3. Canvas fallback
     return new Promise(resolve => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
