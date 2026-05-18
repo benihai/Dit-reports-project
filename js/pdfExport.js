@@ -410,7 +410,8 @@ const PdfExport = (() => {
     // html2canvas never has to fetch a cross-origin URL itself.
     let clientLogoSrc = rawLogoSrc;
     if (opts.inlineLogo && rawLogoSrc && !rawLogoSrc.startsWith('data:')) {
-      clientLogoSrc = await _toDataUrl(rawLogoSrc) || '';
+      // Fall back to original URL if conversion fails — html2canvas + useCORS will try CORS
+      clientLogoSrc = (await _toDataUrl(rawLogoSrc)) || rawLogoSrc;
     }
     const clientName = project?.clientName || project?.name || '';
 

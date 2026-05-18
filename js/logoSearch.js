@@ -112,9 +112,9 @@ const LogoSearch = (() => {
           canvas.height = img.naturalHeight || 128;
           canvas.getContext('2d').drawImage(img, 0, 0);
           resolve(canvas.toDataURL('image/png'));
-        } catch (_) { resolve(null); }
+        } catch (_) { resolve(imgUrl); }  // tainted canvas — return URL as fallback
       };
-      img.onerror = () => resolve(null);
+      img.onerror = () => resolve(imgUrl);  // fallback: store URL so preview still shows
       img.src = imgUrl + (imgUrl.includes('?') ? '&' : '?') + '_cors=' + Date.now();
     });
   }

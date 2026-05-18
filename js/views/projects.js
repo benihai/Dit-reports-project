@@ -185,8 +185,7 @@ const ProjectsView = (() => {
       const url = await LogoSearch.searchByDomain(domain);
       if (!url) { App.toast('לא נמצא לוגו לדומיין זה'); return; }
       const dataUrl = await LogoSearch.toDataUrl(url);
-      if (!dataUrl) { App.toast('לא ניתן לייבא לוגו — אנא העלה את קובץ הלוגו ידנית'); return; }
-      _pendingLogo = dataUrl;
+      _pendingLogo = dataUrl || url;
       const preview = document.getElementById('ep-logo-preview');
       if (preview) preview.innerHTML = `<img src="${dataUrl}" style="max-width:54px;max-height:38px;object-fit:contain;">`;
       App.toast('לוגו נמצא');

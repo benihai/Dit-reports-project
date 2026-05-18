@@ -121,14 +121,9 @@ const NewProjectView = (() => {
       let url = domain ? await LogoSearch.searchByDomain(domain) : null;
       if (!url && company) url = await LogoSearch.searchByName(company);
       if (url) {
-        const data = await LogoSearch.toDataUrl(url);
-        if (data) {
-          setLogo(data);
-          if (statusEl) statusEl.innerHTML = '';
-          App.toast('לוגו נמצא!');
-        } else {
-          if (statusEl) statusEl.innerHTML = '';
-        }
+        setLogo(await LogoSearch.toDataUrl(url) || url);
+        if (statusEl) statusEl.innerHTML = '';
+        App.toast('לוגו נמצא!');
       } else {
         if (statusEl) statusEl.innerHTML = '';
       }
@@ -156,13 +151,8 @@ const NewProjectView = (() => {
       let url = domain ? await LogoSearch.searchByDomain(domain) : null;
       if (!url && company) url = await LogoSearch.searchByName(company);
       if (url) {
-        const data = await LogoSearch.toDataUrl(url);
-        if (data) {
-          setLogo(data);
-          App.toast('לוגו נמצא!');
-        } else {
-          App.toast('לא ניתן לייבא לוגו — אנא העלה את קובץ הלוגו ידנית');
-        }
+        setLogo(await LogoSearch.toDataUrl(url) || url);
+        App.toast('לוגו נמצא!');
       } else {
         App.toast('לא נמצא לוגו — הזן דומיין אתר החברה (לדוגמה: abc.co.il) או העלה ידנית');
       }
