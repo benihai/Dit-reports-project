@@ -95,7 +95,7 @@ const PdfExport = (() => {
   // ─────────────────────────────────────────────────────────────────────────────
   function reportHeaderHtml(clientLogoSrc, clientName, report) {
     const clientSlot = clientLogoSrc
-      ? `<img src="${clientLogoSrc}" alt="${esc(clientName)}" data-inline-logo="1"
+      ? `<img src="${clientLogoSrc}" alt="${esc(clientName)}"
            style="height:60px;width:auto;max-width:140px;object-fit:contain;display:block;">`
       : `<div style="width:130px;height:68px;
               border:1.5px dashed #BFBFBF;border-radius:6px;
@@ -403,10 +403,16 @@ const PdfExport = (() => {
     });
   }
 
-  async function buildHtml(report, notes, project) {
+  async function buildHtml(report, notes, project, opts = {}) {
     _currentReport = report;
-    const clientLogoSrc = project?.logoData || '';
-    const clientName    = project?.clientName || project?.name || '';
+    const rawLogoSrc = project?.logoData || '';
+    // When rendering for PDF export, pre-convert the logo to a data URL so
+    // html2canvas never has to fetch a cross-origin URL itself.
+    let clientLogoSrc = rawLogoSrc;
+    if (opts.inlineLogo && rawLogoSrc && !rawLogoSrc.startsWith('data:')) {
+      clientLogoSrc = await _toDataUrl(rawLogoSrc) || '';
+    }
+    const clientName = project?.clientName || project?.name || '';
 
     // findings section
     let findingsHtml;
@@ -582,20 +588,20 @@ const PdfExport = (() => {
 
   async function generate(report, notes, project, prebuiltHtml = null) {
     await _ensureLibs();
-    const html = prebuiltHtml || await buildHtml(report, notes, project);
+    // Always rebuild with inlineLogo so the logo <img> has a data: URL
+    // before html2canvas sees it — avoids any cross-origin canvas taint.
+    const html = await buildHtml(report, notes, project, { inlineLogo: true });
 
     const container = document.getElementById('pdf-template');
     container.innerHTML = html;
-    await _inlineExternalImages(container);
     await waitForImages(container);
     _avoidPageBreaks(container);
     // Wait for fonts to be ready before html2canvas
     await document.fonts.ready.catch(() => {});
 
     const canvas = await html2canvas(container, {
-      scale:           1.5,   // was 2 (4× pixels); 1.5 reduces processing ~44% at still-sharp quality
+      scale:           1.5,
       useCORS:         true,
-      allowTaint:      true,
       backgroundColor: '#ffffff',
       logging:         false,
     });
