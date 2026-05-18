@@ -382,19 +382,22 @@ const PdfExport = (() => {
     });
   }
 
+  // Supabase Edge Function — server-side fetch, no CORS limits, accessible from any host
+  const _PROXY = 'https://plmvrqdaxfraizlillgm.supabase.co/functions/v1/logo-proxy';
+
   async function _toDataUrl(url) {
     if (!url || url.startsWith('data:')) return url;
-    // 1. Netlify proxy — server-side fetch bypasses all CORS restrictions
+    // 1. Supabase proxy (works from GitHub Pages, Netlify, anywhere)
     try {
-      const r = await _fetchBlob(`/.netlify/functions/logo-proxy?url=${encodeURIComponent(url)}`);
+      const r = await _fetchBlob(`${_PROXY}?url=${encodeURIComponent(url)}`);
       if (r) return r;
     } catch (_) {}
-    // 2. Direct CORS fetch (works for Clearbit, which sends Access-Control-Allow-Origin: *)
+    // 2. Direct CORS fetch (works for services that send Access-Control-Allow-Origin: *)
     try {
       const r = await _fetchBlob(url);
       if (r) return r;
     } catch (_) {}
-    // 3. Canvas fallback
+    // 3. Canvas fallback with cache-buster
     return new Promise(resolve => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
