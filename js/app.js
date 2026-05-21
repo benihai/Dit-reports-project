@@ -159,10 +159,7 @@ const App = (() => {
   }
 
   async function _startApp() {
-    hideLoading();
-    // Wait for profile to finish loading (started in auth.js background).
-    // This is non-blocking from the auth event side but ensures we know the
-    // role before registering routes.
+    showLoading('טוען...');
     await Auth.ensureProfile();
     Router.clear();
     if (Auth.isAdmin()) {
@@ -171,6 +168,10 @@ const App = (() => {
       _initViewerRoutes();
     }
     Router.init();
+    // Must hide AFTER Router.init() — LoginView.submit() calls showLoading()
+    // after Auth.login() returns, which races with the hideLoading() that was
+    // at the top of this function and left a permanent overlay.
+    hideLoading();
   }
 
   // ── Boot ───────────────────────────────────────────────────────────────────
