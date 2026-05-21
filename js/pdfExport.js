@@ -13,14 +13,9 @@ const PdfExport = (() => {
   }
 
   async function _ensureLibs() {
-    await Promise.all([
-      typeof html2canvas !== 'undefined' ? Promise.resolve()
-        : _loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'),
-      typeof window.jspdf !== 'undefined' ? Promise.resolve()
-        : _loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'),
-      typeof QRCode !== 'undefined' ? Promise.resolve()
-        : _loadScript('https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js'),
-    ]);
+    if (typeof QRCode === 'undefined') {
+      await _loadScript('https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js');
+    }
   }
 
   // ── HELPERS ──────────────────────────────────────────────────────────────────
@@ -187,40 +182,25 @@ const PdfExport = (() => {
   // ─────────────────────────────────────────────────────────────────────────────
   async function findingCardHtml(note, index) {
     const num      = String(index).padStart(2, '0');
-    const title    = shortTitle(note.description);
-    const location = [note.floor, note.area].filter(Boolean).join(' / ');
+    const location = [note.floor, note.area].filter(Boolean).join(' · ');
 
-    // ── media ──
-    const images     = (note.mediaItems || []).filter(m => m.type === 'image');
-    const firstPhoto = images[0] || null;
-    const extraImgs  = images.slice(1);
-
-    const photoHtml = firstPhoto ? `
-      <figure style="margin:0;">
-        <div style="height:160px;border-radius:4px;border:1px solid #D1D1CC;overflow:hidden;">
-          <img src="${firstPhoto.data}"
-               style="width:100%;height:100%;object-fit:cover;display:block;">
-        </div>
-        <figcaption style="font-size:11px;color:#6B6B6B;margin-top:6px;
-                           display:flex;align-items:center;gap:6px;">
-          ${icon('camera', 12, '#9A9A9A')}
-          ${esc(location || 'תמונת שטח')}
-        </figcaption>
-      </figure>` : '';
-
-    const extraHtml = extraImgs.length ? `
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;
-                  padding-top:10px;border-top:1px solid #E6E6E2;">
-        ${extraImgs.map(m => `
-          <div style="width:155px;height:115px;border-radius:4px;
-                      border:1px solid #D1D1CC;overflow:hidden;flex-shrink:0;">
-            <img src="${m.data}" style="width:100%;height:100%;object-fit:cover;display:block;">
-          </div>`).join('')}
+    // ── all images in a single row, natural proportions ──
+    const images = (note.mediaItems || []).filter(m => m.type === 'image');
+    const imagesHtml = images.length ? `
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid #E6E6E2;
+                  display:flex;flex-wrap:wrap;gap:10px;">
+        ${images.map(m => `
+          <figure style="margin:0;flex-shrink:0;">
+            <img src="${m.data}"
+                 style="max-width:220px;max-height:180px;width:auto;height:auto;
+                        object-fit:contain;display:block;border-radius:4px;
+                        border:1px solid #D1D1CC;">
+          </figure>`).join('')}
       </div>` : '';
 
     // ── plan markups ──
     const markupsHtml = (note.planMarkups || []).length ? `
-      <div style="margin-top:10px;padding-top:10px;border-top:1px solid #E6E6E2;">
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid #E6E6E2;">
         <div style="font-size:10px;color:#6B6B6B;font-weight:600;
                     letter-spacing:.06em;text-transform:uppercase;
                     margin-bottom:8px;">תוכניות מסומנות</div>
@@ -237,7 +217,7 @@ const PdfExport = (() => {
         </div>
       </div>` : '';
 
-    // ── video QR codes — generated in parallel ──
+    // ── video QR codes ──
     const videos = (note.mediaItems || []).filter(m => m.type === 'video');
     let videoHtml = '';
     if (videos.length) {
@@ -261,11 +241,7 @@ const PdfExport = (() => {
         </div>`;
     }
 
-    const hasExtra = extraHtml || markupsHtml || videoHtml;
-
-    // ── footer items ──
     const ref = `FIND-${String(_currentReport?.reportNumber||0).padStart(3,'0')}-${num}`;
-    const refHtml = `<span style="font-family:monospace;font-size:12px;color:#9A9A9A;">${ref}</span>`;
 
     return `
       <article data-finding-card="1"
@@ -273,34 +249,31 @@ const PdfExport = (() => {
                       box-shadow:0 1px 2px rgba(26,26,26,.06);overflow:hidden;
                       margin-bottom:24px;page-break-inside:avoid;">
 
-        <!-- Card head -->
-        <div style="display:flex;align-items:center;gap:14px;
-                    padding:12px 18px;border-bottom:1px solid #E6E6E2;">
-          <span style="font-family:monospace;font-size:11px;font-weight:700;
-                       background:#1A1A1A;color:#fff;padding:4px 12px;
+        <!-- Card head: number + location details -->
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+                    padding:12px 18px;border-bottom:1px solid #E6E6E2;background:#FAFAF8;">
+          <span style="font-family:monospace;font-size:12px;font-weight:700;
+                       background:#1A1A1A;color:#fff;padding:4px 14px;
                        border-radius:999px;letter-spacing:.04em;
                        white-space:nowrap;flex-shrink:0;">ממצא ${num}</span>
+          ${note.floor ? `<span style="display:flex;align-items:center;gap:5px;
+                                      font-size:13px;font-weight:600;color:#3A3A3A;">
+            ${icon('map', 14, '#6B6B6B')} ${esc(note.floor)}</span>` : ''}
+          ${note.area  ? `<span style="display:flex;align-items:center;gap:5px;
+                                      font-size:13px;font-weight:600;color:#3A3A3A;">
+            ${icon('tag', 14, '#6B6B6B')} ${esc(note.area)}</span>` : ''}
+          <span style="margin-right:auto;font-family:monospace;font-size:11px;
+                       color:#9A9A9A;">${ref}</span>
         </div>
 
-        <!-- Card body: description + first photo -->
-        <div style="display:grid;
-                    grid-template-columns:${firstPhoto ? '1.5fr 1fr' : '1fr'};
-                    gap:18px;padding:16px 18px;">
+        <!-- Card body: description -->
+        <div style="padding:14px 18px;">
           <div style="font-family:'Heebo',Arial,sans-serif;font-size:14px;
-                      color:#1A1A1A;line-height:1.7;white-space:pre-wrap;
+                      color:#1A1A1A;line-height:1.75;white-space:pre-wrap;
                       direction:rtl;text-align:right;">
             ${esc(note.description)}
           </div>
-          ${photoHtml}
-        </div>
-
-        ${hasExtra ? `<div style="padding:0 18px 14px;">${extraHtml}${markupsHtml}${videoHtml}</div>` : ''}
-
-        <!-- Card footer -->
-        <div style="display:flex;justify-content:flex-end;align-items:center;
-                    padding:10px 18px;background:#FAFAF8;
-                    border-top:1px solid #E6E6E2;">
-          ${refHtml}
+          ${imagesHtml}${markupsHtml}${videoHtml}
         </div>
       </article>`;
   }
@@ -419,11 +392,8 @@ const PdfExport = (() => {
   async function buildHtml(report, notes, project, opts = {}) {
     _currentReport = report;
     const rawLogoSrc = project?.logoData || '';
-    // When rendering for PDF export, pre-convert the logo to a data URL so
-    // html2canvas never has to fetch a cross-origin URL itself.
     let clientLogoSrc = rawLogoSrc;
-    if (opts.inlineLogo && rawLogoSrc && !rawLogoSrc.startsWith('data:')) {
-      // Fall back to original URL if conversion fails — html2canvas + useCORS will try CORS
+    if (rawLogoSrc && !rawLogoSrc.startsWith('data:')) {
       clientLogoSrc = (await _toDataUrl(rawLogoSrc)) || rawLogoSrc;
     }
     const clientName = project?.clientName || project?.name || '';
@@ -452,7 +422,7 @@ const PdfExport = (() => {
     }
 
     return `
-      <div style="font-family:'Heebo',Arial,sans-serif;direction:rtl;
+      <div class="dit-report" style="font-family:'Heebo',Arial,sans-serif;direction:rtl;
                   background:#fff;color:#1A1A1A;line-height:1.5;">
         ${reportHeaderHtml(clientLogoSrc, clientName, report)}
         ${metadataBlockHtml(report, project)}
@@ -527,125 +497,63 @@ const PdfExport = (() => {
 
   async function downloadFromPreview() {
     if (!_prevReport) return;
-    App.showLoading('מייצר PDF...');
     try {
-      // Reuse the already-built HTML — no need to regenerate QR codes etc.
-      await generate(_prevReport, _prevNotes, _prevProject, _prevHtml);
+      await generate(_prevReport, _prevNotes, _prevProject);
       document.getElementById('pdf-preview-overlay')?.remove();
     } catch (err) {
       App.toast('שגיאה בייצוא PDF');
       console.error(err);
-    } finally {
-      App.hideLoading();
     }
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // AVOID PAGE BREAKS — push cards that straddle a page boundary to next page
+  // GENERATE PDF  — real PDF via browser print dialog (selectable text)
   // ─────────────────────────────────────────────────────────────────────────────
-  function _avoidPageBreaks(container) {
-    // A4 page height in DOM pixels (container is 794px wide = 210mm)
-    const PAGE_H = Math.round(297 * 794 / 210); // ≈ 1123px
-    const cards = Array.from(container.querySelectorAll('[data-finding-card]'));
-    for (const card of cards) {
-      // Force reflow so positions reflect any spacers inserted for earlier cards
-      void container.offsetHeight;
-      const containerRect = container.getBoundingClientRect();
-      const cardRect = card.getBoundingClientRect();
-      const top = cardRect.top - containerRect.top;
-      const bot = cardRect.bottom - containerRect.top;
-      const pStart = Math.floor(top / PAGE_H);
-      const pEnd   = Math.floor((bot - 1) / PAGE_H);
-      if (pStart !== pEnd && cardRect.height < PAGE_H) {
-        // Use a height spacer (not margin-top) — margins collapse, height never does
-        const push = (pStart + 1) * PAGE_H - top;
-        const spacer = document.createElement('div');
-        spacer.style.height = `${push}px`;
-        card.parentNode.insertBefore(spacer, card);
-      }
+  const _PRINT_CSS = `
+    @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;600;700;800&display=swap');
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #fff; }
+    @page { size: A4; margin: 10mm 12mm; }
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      [data-finding-card] { page-break-inside: avoid; break-inside: avoid; }
+      footer { position: running(footer); }
     }
-  }
+    img { max-width: 100%; }
+    figure { margin: 0; }
+  `;
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // GENERATE PDF  (html2canvas → jsPDF slicing)
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Replace the client logo <img> with a <canvas> so html2canvas can render it
-  // without hitting CORS restrictions (canvas elements are rendered natively).
-  async function _inlineExternalImages(container) {
-    const logoImg = container.querySelector('img[data-inline-logo]');
-    if (!logoImg) return;
-
-    const src = logoImg.getAttribute('src') || '';
-    // Try to get a data URL — cache-buster bypasses any cached non-CORS response.
-    const dataUrl = src.startsWith('data:')
-      ? src
-      : await _toDataUrl(src);
-    if (!dataUrl) return;
-
-    await new Promise(resolve => {
-      const image = new Image();
-      image.onload = () => {
-        try {
-          const c = document.createElement('canvas');
-          c.width  = image.naturalWidth  || 128;
-          c.height = image.naturalHeight || 128;
-          c.style.cssText = logoImg.style.cssText; // preserve layout styles
-          c.getContext('2d').drawImage(image, 0, 0);
-          logoImg.parentNode?.replaceChild(c, logoImg);
-        } catch (_) {}
-        resolve();
-      };
-      image.onerror = () => resolve();
-      image.src = dataUrl;
-    });
-  }
-
-  async function generate(report, notes, project, prebuiltHtml = null) {
+  async function generate(report, notes, project) {
     await _ensureLibs();
-    // Always rebuild with inlineLogo so the logo <img> has a data: URL
-    // before html2canvas sees it — avoids any cross-origin canvas taint.
-    const html = await buildHtml(report, notes, project, { inlineLogo: true });
+    const html = await buildHtml(report, notes, project);
+    const fname = `דוח-${report.reportNumber}-${(project?.name || 'DIT').replace(/\s+/g,'-')}`;
 
-    const container = document.getElementById('pdf-template');
-    container.innerHTML = html;
-    await waitForImages(container);
-    _avoidPageBreaks(container);
-    // Wait for fonts to be ready before html2canvas
-    await document.fonts.ready.catch(() => {});
+    const win = window.open('', '_blank');
+    if (!win) { App.toast('אפשר פתיחת חלון קופץ בדפדפן'); return; }
 
-    const canvas = await html2canvas(container, {
-      scale:           1.5,
-      useCORS:         true,
-      backgroundColor: '#ffffff',
-      logging:         false,
+    win.document.write(`<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="utf-8">
+  <title>${fname}</title>
+  <style>${_PRINT_CSS}</style>
+</head>
+<body>${html}</body>
+</html>`);
+    win.document.close();
+
+    // Wait for fonts + images before triggering print
+    await new Promise(resolve => {
+      win.addEventListener('load', resolve, { once: true });
+      // Safety timeout in case load already fired
+      setTimeout(resolve, 3000);
     });
+    await win.document.fonts.ready.catch(() => {});
 
-    const { jsPDF } = window.jspdf;
-    const pdf    = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const pageW  = pdf.internal.pageSize.getWidth();
-    const pageH  = pdf.internal.pageSize.getHeight();
-    const ratio  = pageW / canvas.width;
-    let rendered = 0, page = 0;
-
-    while (rendered < canvas.height) {
-      if (page > 0) pdf.addPage();
-      const sliceH = Math.min(pageH / ratio, canvas.height - rendered);
-      const slice  = document.createElement('canvas');
-      slice.width  = canvas.width;
-      slice.height = sliceH;
-      slice.getContext('2d').drawImage(
-        canvas, 0, rendered, canvas.width, sliceH,
-        0, 0, canvas.width, sliceH
-      );
-      pdf.addImage(slice.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pageW, sliceH * ratio);
-      rendered += sliceH;
-      page++;
-    }
-
-    container.innerHTML = '';
-
-    const fname = `דוח-${report.reportNumber}-${(project?.name || 'DIT').replace(/\s+/g,'-')}.pdf`;
-    pdf.save(fname);
+    win.focus();
+    win.print();
+    // Close helper window after user dismisses print dialog
+    win.addEventListener('afterprint', () => win.close());
   }
 
   return { generate, preview, downloadFromPreview };
