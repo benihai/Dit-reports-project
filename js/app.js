@@ -57,20 +57,62 @@ const App = (() => {
     if (_loadingEl) { _loadingEl.remove(); _loadingEl = null; }
   }
 
-  function _showError(msg) {
+  function _showError(msg, { showLogout = false } = {}) {
     hideLoading();
+    _appStarted = false;
     const vc = document.getElementById('view-container');
     if (vc) vc.innerHTML =
       `<div style="padding:32px 20px;text-align:center;">
          <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:24px;display:inline-block;max-width:400px;text-align:right;">
            <p style="color:#dc2626;font-weight:700;margin-bottom:8px;">שגיאה</p>
            <p style="color:#7f1d1d;font-size:.9rem;">${msg}</p>
-           <button onclick="location.reload()" style="margin-top:16px;padding:8px 20px;background:#8DC63F;color:white;border:none;border-radius:6px;cursor:pointer;font-size:.9rem;">רענן דף</button>
+           <div style="margin-top:16px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+             ${showLogout ? `<button onclick="Auth.logout()" style="padding:8px 20px;background:#8DC63F;color:white;border:none;border-radius:6px;cursor:pointer;font-size:.9rem;">יציאה והתחברות מחדש</button>` : ''}
+             <button onclick="location.reload()" style="padding:8px 20px;background:white;color:#374151;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;font-size:.9rem;">רענן דף</button>
+           </div>
          </div>
        </div>`;
+    setHeader('', false, '');
+  }
+
+  function showAccessDenied(message = 'אין לך הרשאה לגשת לתיקייה זו', { showLogout = false } = {}) {
+    hideLoading();
+    toast(message);
+    const personId = Auth.getAssignedPersonId();
+    const backPath = Auth.isAdmin() ? '/' : (personId ? `/person/${personId}` : '/');
+    const vc = document.getElementById('view-container');
+    if (vc) vc.innerHTML = `
+      <div class="access-denied">
+        <div class="access-denied-icon">${showLogout ? '⚠️' : '🚫'}</div>
+        <h2>${showLogout ? 'החשבון לא מוגדר' : 'גישה נדחתה'}</h2>
+        <p>${message}</p>
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:8px;">
+          ${showLogout
+            ? `<button class="btn btn-primary" onclick="Auth.logout()">יציאה והתחברות מחדש</button>`
+            : `<button class="btn btn-primary" onclick="Router.navigate('${backPath}')">חזרה</button>`}
+        </div>
+      </div>`;
+    setHeader(showLogout ? 'הגדרת חשבון' : 'גישה נדחתה', false, _userHeaderActions());
   }
 
   // ── Admin header actions ───────────────────────────────────────────────────
+
+  function _userHeaderActions() {
+    return `
+      <button class="btn-icon" onclick="UserHomeView.openProfile()" title="הפרופיל שלי" aria-label="הפרופיל שלי">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+          <circle cx="12" cy="7" r="4"/>
+        </svg>
+      </button>
+      <button class="btn-icon" onclick="Auth.logout()" title="יציאה" aria-label="יציאה">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16 17 21 12 16 7"/>
+          <line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+      </button>`;
+  }
 
   function _adminHeaderActions() {
     return `
@@ -107,38 +149,80 @@ const App = (() => {
     });
   }
 
-  function _initAdminRoutes() {
-    Router.register('/', () => {
-      ReportView.cleanup();
-      _safeRender(() => PeopleView.render({ headerActionsHtml: _adminHeaderActions() }));
-    });
-    Router.register('/person/:personId', (p) => {
-      ReportView.cleanup();
-      _safeRender(() => ProjectsView.render(p));
-    });
-    Router.register('/person/:personId/new-project', (p) => {
-      ReportView.cleanup();
-      _safeRender(() => NewProjectView.render(p));
-    });
-    Router.register('/project/:projectId', (p) => {
-      ReportView.cleanup();
-      _safeRender(() => ReportsView.render(p));
-    });
-    Router.register('/report/:reportId', (p) => {
-      _safeRender(() => ReportView.render(p));
-    });
-    Router.register('/admin', () => {
-      ReportView.cleanup();
-      _safeRender(() => AdminView.render());
-    });
+  async function _guardPerson(personId, fn) {
+    if (!Auth.canAccessPerson(personId)) {
+      showAccessDenied('אין לך הרשאה לגשת לתיקייה זו');
+      return;
+    }
+    await fn();
   }
 
-  function _initViewerRoutes() {
+  async function _guardProject(projectId, fn) {
+    if (!(await Auth.canAccessProject(projectId))) {
+      showAccessDenied('אין לך הרשאה לגשת לפרויקט זה');
+      return;
+    }
+    await fn();
+  }
+
+  async function _guardReport(reportId, fn) {
+    if (!(await Auth.canAccessReport(reportId))) {
+      showAccessDenied('אין לך הרשאה לגשת לדוח זה');
+      return;
+    }
+    await fn();
+  }
+
+  function _initRoutes() {
+    const header = Auth.isAdmin() ? _adminHeaderActions() : _userHeaderActions();
+
     Router.register('/', () => {
-      _safeRender(() => ViewerReportsView.render());
+      ReportView.cleanup();
+      if (Auth.isAdmin()) {
+        _safeRender(() => PeopleView.render({ headerActionsHtml: header }));
+        return;
+      }
+      const personId = Auth.getAssignedPersonId();
+      if (personId) {
+        _safeRender(() => UserHomeView.render());
+      } else {
+        showAccessDenied(
+          'לא הוקצתה לך תיקייה במערכת. פנה למנהל המערכת לשיוך תיקייה, או התחבר עם חשבון אחר.',
+          { showLogout: true }
+        );
+      }
     });
+
+    Router.register('/person/:personId', (p) => {
+      ReportView.cleanup();
+      if (!Auth.isAdmin() && p.personId === Auth.getAssignedPersonId()) {
+        _safeRender(() => UserHomeView.render());
+        return;
+      }
+      _safeRender(() => _guardPerson(p.personId, () => ProjectsView.render(p)));
+    });
+
+    Router.register('/person/:personId/new-project', (p) => {
+      ReportView.cleanup();
+      _safeRender(() => _guardPerson(p.personId, () => NewProjectView.render(p)));
+    });
+
+    Router.register('/project/:projectId', (p) => {
+      ReportView.cleanup();
+      _safeRender(() => _guardProject(p.projectId, () => ReportsView.render(p)));
+    });
+
     Router.register('/report/:reportId', (p) => {
-      _safeRender(() => ReportView.render(p, { readOnly: true }));
+      _safeRender(() => _guardReport(p.reportId, () => ReportView.render(p)));
+    });
+
+    Router.register('/admin', () => {
+      ReportView.cleanup();
+      if (!Auth.isAdmin()) {
+        showAccessDenied('דף זה זמין למנהלי מערכת בלבד');
+        return;
+      }
+      _safeRender(() => AdminView.render());
     });
   }
 
@@ -161,12 +245,15 @@ const App = (() => {
   async function _startApp() {
     showLoading('טוען...');
     await Auth.ensureProfile();
-    Router.clear();
-    if (Auth.isAdmin()) {
-      _initAdminRoutes();
-    } else {
-      _initViewerRoutes();
+
+    const profile = Auth.getProfile();
+    if (!profile) {
+      _showError('לא נמצא פרופיל למשתמש זה. פנה למנהל המערכת.', { showLogout: true });
+      return;
     }
+
+    Router.clear();
+    _initRoutes();
     Router.init();
     // Must hide AFTER Router.init() — LoginView.submit() calls showLoading()
     // after Auth.login() returns, which races with the hideLoading() that was
@@ -207,7 +294,7 @@ const App = (() => {
     }, 8000);
   }
 
-  return { setHeader, goBack, toast, confirm, showLoading, hideLoading, init };
+  return { setHeader, goBack, toast, confirm, showLoading, hideLoading, showAccessDenied, init };
 })();
 
 document.addEventListener('DOMContentLoaded', App.init);

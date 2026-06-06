@@ -119,15 +119,19 @@ const ReportsView = (() => {
                   border-radius:4px;padding:2px 6px;background:white;margin-bottom:10px;">`
       : '';
 
-    const breadcrumb = `
-      <div class="breadcrumb">
-        <span class="breadcrumb-item" onclick="Router.navigate('/')">דף הבית</span>
-        <span class="breadcrumb-sep">›</span>
-        <span class="breadcrumb-item" onclick="Router.navigate('/person/${project.personId}')">${escHtml(person?.name || '')}</span>
-        <span class="breadcrumb-sep">›</span>
-        <span class="breadcrumb-current">${escHtml(project.name)}</span>
-      </div>
-    `;
+    const breadcrumb = Auth.isAdmin()
+      ? `<div class="breadcrumb">
+           <span class="breadcrumb-item" onclick="Router.navigate('/')">דף הבית</span>
+           <span class="breadcrumb-sep">›</span>
+           <span class="breadcrumb-item" onclick="Router.navigate('/person/${project.personId}')">${escHtml(person?.name || '')}</span>
+           <span class="breadcrumb-sep">›</span>
+           <span class="breadcrumb-current">${escHtml(project.name)}</span>
+         </div>`
+      : `<div class="breadcrumb">
+           <span class="breadcrumb-item" onclick="Router.navigate('/')">דף הבית</span>
+           <span class="breadcrumb-sep">›</span>
+           <span class="breadcrumb-current">${escHtml(project.name)}</span>
+         </div>`;
 
     const reportsHtml = reports.length === 0
       ? `<div class="empty-state" style="padding:30px 16px;">

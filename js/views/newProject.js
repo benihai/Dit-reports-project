@@ -18,11 +18,15 @@ const NewProjectView = (() => {
 
     App.setHeader('פרויקט חדש', true, '');
 
+    const personCrumb = Auth.isAdmin()
+      ? `<span class="breadcrumb-sep">›</span>
+         <span class="breadcrumb-item" onclick="Router.navigate('/person/${personId}')">${escHtml(person.name)}</span>`
+      : '';
+
     document.getElementById('view-container').innerHTML = `
       <div class="breadcrumb">
         <span class="breadcrumb-item" onclick="Router.navigate('/')">דף הבית</span>
-        <span class="breadcrumb-sep">›</span>
-        <span class="breadcrumb-item" onclick="Router.navigate('/person/${personId}')">${escHtml(person.name)}</span>
+        ${personCrumb}
         <span class="breadcrumb-sep">›</span>
         <span class="breadcrumb-current">פרויקט חדש</span>
       </div>

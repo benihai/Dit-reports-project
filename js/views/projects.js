@@ -41,13 +41,21 @@ const ProjectsView = (() => {
     `;
   }
 
+  function homePath() {
+    return '/';
+  }
+
   async function render({ personId }) {
-    // Fetch person + projects in parallel to halve the initial wait
+    if (!Auth.canAccessPerson(personId)) {
+      App.showAccessDenied('אין לך הרשאה לגשת לתיקייה זו');
+      return;
+    }
+
     const [person, projects] = await Promise.all([
       Storage.People.get(personId),
       Storage.Projects.getForPerson(personId),
     ]);
-    if (!person) { Router.navigate('/'); return; }
+    if (!person) { Router.navigate(homePath()); return; }
 
     App.setHeader(person.name, true, `
       <button class="btn btn-primary btn-sm" onclick="Router.navigate('/person/${personId}/new-project')">
@@ -65,7 +73,7 @@ const ProjectsView = (() => {
     if (projects.length === 0) {
       container.innerHTML = `
         <div class="breadcrumb">
-          <span class="breadcrumb-item" onclick="Router.navigate('/')">דף הבית</span>
+          <span class="breadcrumb-item" onclick="Router.navigate('${homePath()}')">דף הבית</span>
           <span class="breadcrumb-sep">›</span>
           <span class="breadcrumb-current">${escHtml(person.name)}</span>
         </div>
@@ -84,7 +92,7 @@ const ProjectsView = (() => {
 
     container.innerHTML = `
       <div class="breadcrumb">
-        <span class="breadcrumb-item" onclick="Router.navigate('/')">דף הבית</span>
+        <span class="breadcrumb-item" onclick="Router.navigate('${homePath()}')">דף הבית</span>
         <span class="breadcrumb-sep">›</span>
         <span class="breadcrumb-current">${escHtml(person.name)}</span>
       </div>
@@ -232,7 +240,7 @@ const ProjectsView = (() => {
       const proj = await Storage.Projects.get(id);
       await Storage.Projects.delete(id);
       App.toast('הפרויקט נמחק');
-      Router.navigate(`/person/${proj.personId}`);
+      Router.navigate(Auth.isAdmin() ? `/person/${proj.personId}` : '/');
     });
   }
 

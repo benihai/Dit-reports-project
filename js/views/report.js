@@ -49,15 +49,23 @@ const ReportView = (() => {
            <span class="breadcrumb-sep">›</span>
            <span class="breadcrumb-current">דוח #${report.reportNumber}</span>
          </div>`
-      : `<div class="breadcrumb">
-           <span class="breadcrumb-item" onclick="Router.navigate('/')">דף הבית</span>
-           <span class="breadcrumb-sep">›</span>
-           <span class="breadcrumb-item" onclick="Router.navigate('/person/${person?.id || ''}')">${escHtml(person?.name || '')}</span>
-           <span class="breadcrumb-sep">›</span>
-           <span class="breadcrumb-item" onclick="Router.navigate('/project/${project?.id || ''}')">${escHtml(project?.name || '')}</span>
-           <span class="breadcrumb-sep">›</span>
-           <span class="breadcrumb-current">דוח #${report.reportNumber}</span>
-         </div>`;
+      : Auth.isAdmin()
+        ? `<div class="breadcrumb">
+             <span class="breadcrumb-item" onclick="Router.navigate('/')">דף הבית</span>
+             <span class="breadcrumb-sep">›</span>
+             <span class="breadcrumb-item" onclick="Router.navigate('/person/${person?.id || ''}')">${escHtml(person?.name || '')}</span>
+             <span class="breadcrumb-sep">›</span>
+             <span class="breadcrumb-item" onclick="Router.navigate('/project/${project?.id || ''}')">${escHtml(project?.name || '')}</span>
+             <span class="breadcrumb-sep">›</span>
+             <span class="breadcrumb-current">דוח #${report.reportNumber}</span>
+           </div>`
+        : `<div class="breadcrumb">
+             <span class="breadcrumb-item" onclick="Router.navigate('/')">דף הבית</span>
+             <span class="breadcrumb-sep">›</span>
+             <span class="breadcrumb-item" onclick="Router.navigate('/project/${project?.id || ''}')">${escHtml(project?.name || '')}</span>
+             <span class="breadcrumb-sep">›</span>
+             <span class="breadcrumb-current">דוח #${report.reportNumber}</span>
+           </div>`;
 
     container.innerHTML = breadcrumb + headerSectionHtml(report) + notesSectionHtml(notes);
 

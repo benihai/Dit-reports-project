@@ -1,74 +1,140 @@
 const AdminView = (() => {
-  let _users      = [];
-  let _allReports = [];
+  let _users   = [];
+  let _people  = [];
 
   function escHtml(s) {
     return String(s == null ? '' : s)
       .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  // ── LOAD ────────────────────────────────────────────────────────────────────
+  function roleLabel(role) {
+    if (role === 'admin') return 'מנהל מערכת';
+    if (role === 'viewer') return 'צופה (ישן)';
+    return 'משתמש';
+  }
+
+  function displayName(u) {
+    return u.name || u.email || `משתמש ${String(u.id).slice(0, 8)}`;
+  }
+
+  function personName(personId) {
+    if (!personId) return '— לא משויך —';
+    const p = _people.find(x => x.id === personId);
+    return p ? p.name : personId;
+  }
+
+  function folderOptionsHtml(selectedId, includeNew = false) {
+    const opts = _people.map(p =>
+      `<option value="${escHtml(p.id)}" ${p.id === selectedId ? 'selected' : ''}>${escHtml(p.name)}</option>`
+    ).join('');
+    const newOpt = includeNew
+      ? `<option value="__new__" ${selectedId === '__new__' ? 'selected' : ''}>+ צור תיקייה חדשה...</option>`
+      : '';
+    return `<option value="">— בחר תיקייה —</option>${opts}${newOpt}`;
+  }
+
+  function folderFieldHtml() {
+    const noFolders = _people.length === 0;
+    return `
+      <div class="form-group" id="new-user-folder-group">
+        <label>תיקייה משויכת <span class="required">*</span></label>
+
+        <div id="new-user-folder-existing" class="${noFolders ? 'hidden' : ''}">
+          <select id="new-user-folder" onchange="AdminView.onFolderSelectChange()">
+            ${folderOptionsHtml('', true)}
+          </select>
+          <button type="button" class="btn btn-outline btn-sm folder-inline-btn" onclick="AdminView.showNewFolderForm()">+ תיקייה חדשה</button>
+        </div>
+
+        <div id="new-user-folder-new" class="${noFolders ? '' : 'hidden'}">
+          <input type="text" id="new-folder-name" placeholder="שם התיקייה (למשל: דני כהן)">
+          <p class="form-hint">תיקייה חדשה תיווצר ותשויך אוטומטית למשתמש</p>
+          ${_people.length > 0 ? `
+            <button type="button" class="btn btn-ghost btn-sm folder-inline-btn" onclick="AdminView.showExistingFolderList()">בחר מתיקייה קיימת</button>
+          ` : ''}
+        </div>
+      </div>`;
+  }
 
   async function render() {
+    if (!Auth.isAdmin()) {
+      App.showAccessDenied('דף זה זמין למנהלי מערכת בלבד');
+      return;
+    }
+
     App.setHeader('ניהול משתמשים', true, '');
     const container = document.getElementById('view-container');
     container.innerHTML = `<div style="padding:40px;text-align:center;"><div class="spinner" style="width:36px;height:36px;border-color:var(--border);border-top-color:var(--green);"></div></div>`;
 
     try {
-      [_users, _allReports] = await Promise.all([Auth.getAllUsers(), _loadAllReports()]);
+      [_users, _people] = await Promise.all([Auth.getAllUsers(), Storage.People.getAll()]);
       _renderContent();
     } catch (err) {
       container.innerHTML = `<div class="empty-state"><p>שגיאה בטעינה: ${escHtml(err.message)}</p></div>`;
     }
   }
 
-  async function _loadAllReports() {
-    const people = await Storage.People.getAll();
-    const flat = [];
-    for (const person of people) {
-      const projects = await Storage.Projects.getForPerson(person.id);
-      for (const project of projects) {
-        const reports = await Storage.Reports.getForProject(project.id);
-        for (const report of reports) {
-          flat.push({ ...report, personName: person.name, projectName: project.name });
-        }
-      }
-    }
-    return flat.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-  }
-
-  // ── RENDER ──────────────────────────────────────────────────────────────────
-
   function _renderContent() {
     const meId = Auth.getUser()?.id;
     const container = document.getElementById('view-container');
 
+    const rowsHtml = _users.length === 0
+      ? `<tr><td colspan="5" class="users-table-empty">אין משתמשים עדיין</td></tr>`
+      : _users.map(u => `
+          <tr class="${u.id === meId ? 'users-table-row-current' : ''}">
+            <td class="users-col-name">
+              <div class="users-name">${escHtml(displayName(u))}</div>
+              ${u.id === meId ? '<span class="users-you-badge">אתה</span>' : ''}
+            </td>
+            <td class="users-col-email">${escHtml(u.email || '—')}</td>
+            <td class="users-col-role">
+              <span class="user-role-badge ${u.role === 'admin' ? 'admin' : 'user'}">${roleLabel(u.role)}</span>
+            </td>
+            <td class="users-col-folder">
+              ${u.role === 'admin'
+                ? '<span class="users-all-folders">כל התיקיות</span>'
+                : escHtml(personName(u.person_id))}
+            </td>
+            <td class="users-col-actions">
+              ${u.role !== 'admin' && u.id !== meId ? `
+                <select class="user-folder-select" onchange="AdminView.onRowFolderChange('${escHtml(u.id)}', this)">
+                  ${folderOptionsHtml(u.person_id, true)}
+                </select>
+              ` : ''}
+              ${u.id !== meId ? `
+                <button class="btn btn-outline btn-sm btn-danger-text" onclick="AdminView.deleteUser('${escHtml(u.id)}','${escHtml(displayName(u))}')">הסר</button>
+              ` : '<span class="users-no-action">—</span>'}
+            </td>
+          </tr>
+        `).join('');
+
     container.innerHTML = `
+      <div class="admin-intro">
+        <p>כאן ניתן להוסיף משתמשים חדשים, לשייך כל משתמש ל<strong>תיקייה אחת</strong> (מנהל פרויקטים), ולהסיר משתמשים מהמערכת.</p>
+        <p class="admin-intro-note">אין תיקייה? ניתן ליצור תיקייה חדשה ישירות בעת הוספת משתמש.</p>
+      </div>
+
       <div class="admin-section" style="margin-top:8px;">
         <div class="admin-section-header">
           <span class="admin-section-title">משתמשים (${_users.length})</span>
           <button class="btn btn-primary btn-sm" onclick="AdminView.showCreateUser()">+ משתמש חדש</button>
         </div>
-        <div class="user-list">
-          ${_users.length === 0 ? '<div style="padding:16px;color:var(--text-muted);text-align:center;">אין משתמשים עדיין</div>' :
-            _users.map(u => `
-              <div class="user-card ${u.id === meId ? 'user-card-current' : ''}">
-                <div class="user-info">
-                  <div class="user-name">${escHtml(u.name || '—')}</div>
-                  <span class="user-role-badge ${u.role === 'admin' ? 'admin' : 'viewer'}">${u.role === 'admin' ? 'מנהל' : 'צופה'}</span>
-                </div>
-                <div class="user-actions">
-                  ${u.role === 'viewer' ? `<button class="btn btn-outline btn-sm" onclick="AdminView.managePermissions('${escHtml(u.id)}')">הרשאות</button>` : ''}
-                  ${u.id !== meId ? `<button class="btn btn-outline btn-sm" onclick="AdminView.toggleRole('${escHtml(u.id)}','${escHtml(u.role)}')">${u.role === 'admin' ? 'הפוך לצופה' : 'הפוך למנהל'}</button>` : ''}
-                </div>
-              </div>
-              <div id="perm-section-${escHtml(u.id)}" class="hidden" style="background:var(--green-bg);border-bottom:1px solid var(--border);"></div>
-            `).join('')
-          }
+        <div class="users-table-wrap">
+          <table class="users-table">
+            <thead>
+              <tr>
+                <th>שם</th>
+                <th>אימייל</th>
+                <th>תפקיד</th>
+                <th>תיקייה</th>
+                <th>פעולות</th>
+              </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
         </div>
       </div>
 
-      <!-- CREATE USER MODAL -->
       <div id="create-user-overlay" class="modal-overlay hidden" onclick="if(event.target===this) AdminView.hideCreateUser()">
         <div class="modal-box" onclick="event.stopPropagation()">
           <div class="modal-handle"></div>
@@ -87,11 +153,12 @@ const AdminView = (() => {
           </div>
           <div class="form-group">
             <label>תפקיד</label>
-            <select id="new-user-role">
-              <option value="viewer">צופה — רק קריאה</option>
-              <option value="admin">מנהל — גישה מלאה</option>
+            <select id="new-user-role" onchange="AdminView.toggleFolderField()">
+              <option value="user">משתמש — גישה לתיקייה אחת</option>
+              <option value="admin">מנהל מערכת — גישה מלאה</option>
             </select>
           </div>
+          ${folderFieldHtml()}
           <div id="create-user-error" class="login-error hidden"></div>
           <div class="modal-actions">
             <button class="btn btn-outline" onclick="AdminView.hideCreateUser()">ביטול</button>
@@ -99,10 +166,109 @@ const AdminView = (() => {
           </div>
         </div>
       </div>
+
+      <div id="new-folder-prompt-overlay" class="modal-overlay hidden" onclick="if(event.target===this) AdminView.hideNewFolderPrompt()">
+        <div class="modal-box" onclick="event.stopPropagation()" style="max-width:360px;">
+          <div class="modal-handle"></div>
+          <div class="modal-title">תיקייה חדשה</div>
+          <div class="form-group">
+            <label>שם התיקייה</label>
+            <input type="text" id="row-new-folder-name" placeholder="למשל: דני כהן">
+          </div>
+          <div class="modal-actions">
+            <button class="btn btn-outline" onclick="AdminView.hideNewFolderPrompt()">ביטול</button>
+            <button class="btn btn-primary" id="row-new-folder-btn" onclick="AdminView.saveNewFolderForUser()">צור ושייך</button>
+          </div>
+        </div>
+      </div>
     `;
   }
 
-  // ── MODAL ───────────────────────────────────────────────────────────────────
+  let _pendingFolderUserId = null;
+
+  function showNewFolderForm() {
+    document.getElementById('new-user-folder-existing')?.classList.add('hidden');
+    document.getElementById('new-user-folder-new')?.classList.remove('hidden');
+    document.getElementById('new-folder-name')?.focus();
+  }
+
+  function showExistingFolderList() {
+    document.getElementById('new-user-folder-new')?.classList.add('hidden');
+    document.getElementById('new-user-folder-existing')?.classList.remove('hidden');
+    const sel = document.getElementById('new-user-folder');
+    if (sel) sel.value = '';
+  }
+
+  function onFolderSelectChange() {
+    const sel = document.getElementById('new-user-folder');
+    if (sel?.value === '__new__') {
+      sel.value = '';
+      showNewFolderForm();
+    }
+  }
+
+  function onRowFolderChange(userId, selectEl) {
+    if (selectEl.value === '__new__') {
+      _pendingFolderUserId = userId;
+      selectEl.value = '';
+      document.getElementById('row-new-folder-name').value = '';
+      document.getElementById('new-folder-prompt-overlay')?.classList.remove('hidden');
+      setTimeout(() => document.getElementById('row-new-folder-name')?.focus(), 80);
+      return;
+    }
+    if (selectEl.value) changeFolder(userId, selectEl.value);
+  }
+
+  function hideNewFolderPrompt() {
+    _pendingFolderUserId = null;
+    document.getElementById('new-folder-prompt-overlay')?.classList.add('hidden');
+  }
+
+  async function _createPerson(name) {
+    const person = { id: Storage.generateId(), name, createdAt: Date.now() };
+    await Storage.People.save(person);
+    _people.push(person);
+    return person;
+  }
+
+  async function saveNewFolderForUser() {
+    const name = document.getElementById('row-new-folder-name')?.value.trim();
+    const btn  = document.getElementById('row-new-folder-btn');
+    if (!name) { App.toast('נא להזין שם תיקייה'); return; }
+    if (!_pendingFolderUserId) return;
+
+    btn.disabled = true;
+    btn.textContent = 'יוצר...';
+    try {
+      const person = await _createPerson(name);
+      await Auth.updateUserFolder(_pendingFolderUserId, person.id);
+      hideNewFolderPrompt();
+      App.toast(`התיקייה "${name}" נוצרה ושויכה`);
+      await render();
+    } catch (err) {
+      App.toast('שגיאה: ' + (err.message || ''));
+      btn.disabled = false;
+      btn.textContent = 'צור ושייך';
+    }
+  }
+
+  async function _resolvePersonId(role) {
+    if (role !== 'user') return null;
+
+    const existingEl = document.getElementById('new-user-folder-existing');
+    const isNewMode  = existingEl?.classList.contains('hidden');
+
+    if (isNewMode || _people.length === 0) {
+      const folderName = document.getElementById('new-folder-name')?.value.trim();
+      if (!folderName) return { error: 'יש להזין שם לתיקייה החדשה' };
+      const person = await _createPerson(folderName);
+      return { personId: person.id };
+    }
+
+    const personId = document.getElementById('new-user-folder')?.value;
+    if (!personId) return { error: 'יש לבחור תיקייה למשתמש' };
+    return { personId };
+  }
 
   function showCreateUser() {
     const overlay = document.getElementById('create-user-overlay');
@@ -110,13 +276,23 @@ const AdminView = (() => {
     document.getElementById('new-user-name').value     = '';
     document.getElementById('new-user-email').value    = '';
     document.getElementById('new-user-password').value = '';
-    document.getElementById('new-user-role').value     = 'viewer';
+    document.getElementById('new-user-role').value     = 'user';
+    document.getElementById('new-folder-name').value   = '';
     document.getElementById('create-user-error').classList.add('hidden');
+    toggleFolderField();
+    if (_people.length === 0) showNewFolderForm();
+    else showExistingFolderList();
     overlay.classList.remove('hidden');
   }
 
   function hideCreateUser() {
     document.getElementById('create-user-overlay')?.classList.add('hidden');
+  }
+
+  function toggleFolderField() {
+    const role  = document.getElementById('new-user-role')?.value;
+    const group = document.getElementById('new-user-folder-group');
+    if (group) group.classList.toggle('hidden', role === 'admin');
   }
 
   async function createUser() {
@@ -133,12 +309,30 @@ const AdminView = (() => {
       errEl.classList.remove('hidden');
       return;
     }
+    if (password.length < 6) {
+      errEl.textContent = 'הסיסמה חייבת להכיל לפחות 6 תווים';
+      errEl.classList.remove('hidden');
+      return;
+    }
 
     btn.disabled = true;
     btn.textContent = 'יוצר...';
 
     try {
-      await Auth.createUser(email, password, name || email, role);
+      let personId = null;
+      if (role === 'user') {
+        const resolved = await _resolvePersonId(role);
+        if (resolved.error) {
+          errEl.textContent = resolved.error;
+          errEl.classList.remove('hidden');
+          btn.disabled = false;
+          btn.textContent = 'צור משתמש';
+          return;
+        }
+        personId = resolved.personId;
+      }
+
+      await Auth.createUser(email, password, name || email, role, personId);
       hideCreateUser();
       App.toast('המשתמש נוצר בהצלחה');
       await render();
@@ -150,74 +344,47 @@ const AdminView = (() => {
     }
   }
 
-  // ── ROLE ────────────────────────────────────────────────────────────────────
-
-  async function toggleRole(userId, currentRole) {
-    const newRole = currentRole === 'admin' ? 'viewer' : 'admin';
+  async function changeFolder(userId, personId) {
+    if (!personId) return;
     try {
-      await Auth.updateUserRole(userId, newRole);
-      App.toast(`תפקיד עודכן ל-${newRole === 'admin' ? 'מנהל' : 'צופה'}`);
+      await Auth.updateUserFolder(userId, personId);
+      App.toast('התיקייה עודכנה');
       await render();
     } catch (err) {
       App.toast('שגיאה: ' + (err.message || 'נסה שנית'));
+      await render();
     }
   }
 
-  // ── PERMISSIONS ─────────────────────────────────────────────────────────────
-
-  async function managePermissions(userId) {
-    const section = document.getElementById(`perm-section-${userId}`);
-    if (!section) return;
-
-    if (!section.classList.contains('hidden')) {
-      section.classList.add('hidden');
-      return;
-    }
-
-    section.innerHTML = '<div style="padding:12px 16px;color:var(--text-muted);">טוען...</div>';
-    section.classList.remove('hidden');
-
-    try {
-      const granted = new Set(await Auth.getReportPermissions(userId));
-
-      const itemsHtml = _allReports.length === 0
-        ? '<div style="padding:12px 16px;color:var(--text-muted);">אין דוחות במערכת עדיין</div>'
-        : _allReports.map(r => `
-            <label class="permission-item">
-              <input type="checkbox" value="${escHtml(r.id)}" ${granted.has(r.id) ? 'checked' : ''}>
-              <div class="permission-info">
-                <div class="permission-report">${escHtml(r.siteName || 'דוח #' + (r.reportNumber || ''))}</div>
-                <div class="permission-meta">${escHtml(r.personName)} · ${escHtml(r.projectName)} · #${r.reportNumber || ''}${r.date ? ' · ' + r.date : ''}</div>
-              </div>
-            </label>
-          `).join('');
-
-      section.innerHTML = `
-        <div class="permissions-list" style="max-height:280px;overflow-y:auto;" id="perm-list-${escHtml(userId)}">
-          ${itemsHtml}
-        </div>
-        <div style="padding:10px 16px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border);">
-          <button class="btn btn-outline btn-sm" onclick="document.getElementById('perm-section-${escHtml(userId)}').classList.add('hidden')">ביטול</button>
-          <button class="btn btn-primary btn-sm" onclick="AdminView.savePermissions('${escHtml(userId)}')">שמור</button>
-        </div>
-      `;
-    } catch (err) {
-      section.innerHTML = `<div style="padding:12px 16px;color:#dc2626;">שגיאה: ${escHtml(err.message)}</div>`;
-    }
+  function deleteUser(userId, displayName) {
+    App.confirm(
+      `להסיר את ${displayName || 'המשתמש'} מהמערכת? לא יוכל עוד להתחבר.`,
+      async () => {
+        try {
+          await Auth.deleteUser(userId);
+          App.toast('המשתמש הוסר');
+          await render();
+        } catch (err) {
+          App.toast('שגיאה: ' + (err.message || 'נסה שנית'));
+        }
+      },
+      'הסר'
+    );
   }
 
-  async function savePermissions(userId) {
-    const list = document.getElementById(`perm-list-${userId}`);
-    if (!list) return;
-    const reportIds = Array.from(list.querySelectorAll('input[type="checkbox"]:checked')).map(c => c.value);
-    try {
-      await Auth.setReportPermissions(userId, reportIds);
-      App.toast('הרשאות עודכנו');
-      document.getElementById(`perm-section-${userId}`)?.classList.add('hidden');
-    } catch (err) {
-      App.toast('שגיאה בשמירה: ' + (err.message || ''));
-    }
-  }
-
-  return { render, showCreateUser, hideCreateUser, createUser, toggleRole, managePermissions, savePermissions };
+  return {
+    render,
+    showCreateUser,
+    hideCreateUser,
+    toggleFolderField,
+    showNewFolderForm,
+    showExistingFolderList,
+    onFolderSelectChange,
+    onRowFolderChange,
+    hideNewFolderPrompt,
+    saveNewFolderForUser,
+    createUser,
+    changeFolder,
+    deleteUser,
+  };
 })();
