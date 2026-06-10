@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "mcp__Claude_Preview__preview_start"
+      "mcp__Claude_Preview__preview_start",
+      "mcp__de61c617-da24-4a45-9be8-c33f40ea32a3__list_projects",
+      "mcp__de61c617-da24-4a45-9be8-c33f40ea32a3__execute_sql",
+      "Bash(git checkout *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ]
   }
 }

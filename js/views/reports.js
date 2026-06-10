@@ -151,6 +151,17 @@ const ReportsView = (() => {
     container.innerHTML = breadcrumb + logoHtml + reportsHtml + planLibrarySectionHtml(plans);
   }
 
+  function _ensurePdfJs() {
+    if (typeof pdfjsLib !== 'undefined') return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js';
+      s.onload = resolve;
+      s.onerror = () => reject(new Error('נכשל בטעינת ספריית PDF'));
+      document.head.appendChild(s);
+    });
+  }
+
   async function uploadPlan(e) {
     const files = Array.from(e.target.files);
     e.target.value = '';
@@ -162,7 +173,7 @@ const ReportsView = (() => {
         const arrayBuffer = await file.arrayBuffer();
         const uint8Array  = new Uint8Array(arrayBuffer);
 
-        if (typeof pdfjsLib === 'undefined') throw new Error('ספריית PDF לא נטענה');
+        await _ensurePdfJs();
         pdfjsLib.GlobalWorkerOptions.workerSrc =
           'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
 

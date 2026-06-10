@@ -88,7 +88,7 @@ const PdfExport = (() => {
   // REPORT HEADER
   // 3-column: [DIT logo] | [centered title] | [client logo slot]
   // ─────────────────────────────────────────────────────────────────────────────
-  function reportHeaderHtml(clientLogoSrc, clientName, report) {
+  function reportHeaderHtml(clientLogoSrc, clientName, report, ditLogoSrc = 'icons/dit-logo.png') {
     const clientSlot = clientLogoSrc
       ? `<img src="${clientLogoSrc}" alt="${esc(clientName)}"
            style="height:60px;width:auto;max-width:140px;object-fit:contain;display:block;">`
@@ -110,7 +110,7 @@ const PdfExport = (() => {
 
           <!-- DIT logo — right in RTL -->
           <div style="display:flex;justify-content:flex-start;">
-            <img src="icons/dit-logo.png" alt="DIT — Design It Right"
+            <img src="${ditLogoSrc}" alt="DIT — Design It Right"
                  style="height:64px;width:auto;display:block;">
           </div>
 
@@ -257,8 +257,8 @@ const PdfExport = (() => {
             <span style="font-family:monospace;font-size:11px;font-weight:700;
                          background:#1A1A1A;color:#fff;padding:3px 12px;
                          border-radius:999px;white-space:nowrap;flex-shrink:0;">ממצא ${num}</span>
-            ${note.floor ? `<span style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:#3A3A3A;white-space:nowrap;">${icon('map',13,'#6B6B6B')} ${esc(note.floor)}</span>` : ''}
-            ${note.area  ? `<span style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:#3A3A3A;white-space:nowrap;">${icon('tag',13,'#6B6B6B')} ${esc(note.area)}</span>` : ''}
+            ${note.floor ? `<span style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:#3A3A3A;white-space:nowrap;">📍 ${esc(note.floor)}</span>` : ''}
+            ${note.area  ? `<span style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:#3A3A3A;white-space:nowrap;">🚪 ${esc(note.area)}</span>` : ''}
           </div>
           <span style="font-family:monospace;font-size:10px;color:#AEAEAD;white-space:nowrap;flex-shrink:0;">${ref}</span>
         </div>
@@ -280,22 +280,21 @@ const PdfExport = (() => {
     if (!report.inspector && !report.summary) return '';
     const summaryText = report.summary || 'לא הוזן סיכום';
     return `
-      <section style="max-width:794px;margin:0 auto;padding:24px 28px 32px;
-                      border-top:2px solid #1A1A1A;">
+      <section dir="rtl" style="max-width:794px;margin:0 auto;padding:24px 28px 32px;
+                      border-top:2px solid #1A1A1A;direction:rtl;text-align:right;">
         <h2 style="margin:0 0 14px;font-family:'Heebo',Arial,sans-serif;
                    font-weight:800;font-size:14px;letter-spacing:.12em;
-                   text-transform:uppercase;color:#6FA82B;">סיכום והנחיות להמשך</h2>
+                   text-transform:uppercase;color:#6FA82B;text-align:right;">סיכום והנחיות להמשך</h2>
         <div style="padding:14px 16px;background:#F6FAEC;border-radius:8px;
                     border:1px solid #BCDE85;margin-bottom:16px;">
           <p style="margin:0;font-family:'Heebo',Arial,sans-serif;font-size:14px;
-                    color:#3A3A3A;line-height:1.65;white-space:pre-wrap;">
-            ${esc(summaryText)}
-          </p>
+                    color:#3A3A3A;line-height:1.65;white-space:pre-wrap;
+                    direction:rtl;text-align:right;">${esc(summaryText).trim()}</p>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-          <div style="display:flex;gap:10px;align-items:center;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;text-align:right;">
+          <div style="display:flex;flex-direction:row-reverse;gap:10px;align-items:center;">
             ${icon('calendar', 16, '#6FA82B')}
-            <div>
+            <div style="text-align:right;">
               <div style="font-size:11px;color:#6B6B6B;font-weight:600;
                           letter-spacing:.06em;text-transform:uppercase;">תאריך הסיור</div>
               <div style="font-family:'Heebo',Arial,sans-serif;font-weight:700;
@@ -304,9 +303,9 @@ const PdfExport = (() => {
               </div>
             </div>
           </div>
-          <div style="display:flex;gap:10px;align-items:center;">
+          <div style="display:flex;flex-direction:row-reverse;gap:10px;align-items:center;">
             ${icon('user', 16, '#6FA82B')}
-            <div>
+            <div style="text-align:right;">
               <div style="font-size:11px;color:#6B6B6B;font-weight:600;
                           letter-spacing:.06em;text-transform:uppercase;">נחתם על ידי</div>
               <div style="font-family:'Heebo',Arial,sans-serif;font-weight:700;
@@ -384,6 +383,26 @@ const PdfExport = (() => {
     });
   }
 
+  // DIT logo כ-data URL (נשמר cache בזיכרון)
+  let _ditLogoCache = null;
+  async function _getDitLogoDataUrl() {
+    if (_ditLogoCache) return _ditLogoCache;
+    try {
+      const r = await fetch('icons/dit-logo.png');
+      if (!r.ok) throw new Error('not ok');
+      const blob = await r.blob();
+      _ditLogoCache = await new Promise((res, rej) => {
+        const fr = new FileReader();
+        fr.onload  = () => res(fr.result);
+        fr.onerror = rej;
+        fr.readAsDataURL(blob);
+      });
+    } catch(e) {
+      _ditLogoCache = 'icons/dit-logo.png'; // fallback לנתיב רגיל
+    }
+    return _ditLogoCache;
+  }
+
   async function buildHtml(report, notes, project, opts = {}) {
     _currentReport = report;
     const rawLogoSrc = project?.logoData || '';
@@ -391,6 +410,8 @@ const PdfExport = (() => {
     if (rawLogoSrc && !rawLogoSrc.startsWith('data:')) {
       clientLogoSrc = (await _toDataUrl(rawLogoSrc)) || rawLogoSrc;
     }
+    // המר לוגו DIT ל-data URL למנוע בעיות CORS ב-html2canvas
+    const ditLogoSrc = await _getDitLogoDataUrl();
     const clientName = project?.clientName || project?.name || '';
 
     // findings section
@@ -419,7 +440,7 @@ const PdfExport = (() => {
     return `
       <div class="dit-report" style="font-family:'Heebo',Arial,sans-serif;direction:rtl;
                   background:#fff;color:#1A1A1A;line-height:1.5;">
-        ${reportHeaderHtml(clientLogoSrc, clientName, report)}
+        ${reportHeaderHtml(clientLogoSrc, clientName, report, ditLogoSrc)}
         ${metadataBlockHtml(report, project)}
         ${findingsHtml}
         ${summaryBlockHtml(report)}
@@ -511,14 +532,21 @@ const PdfExport = (() => {
     *, *::before, *::after { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: #fff; direction: rtl; text-align: right; }
 
-    /* margin:0 removes the browser's URL/date/page-number headers and footers */
-    @page { size: A4 portrait; margin: 0; }
+    /* margin: 0 removes browser URL/date/page-number headers and footers.
+       top/bottom 10mm gives breathing room so content is not clipped at page edges. */
+    @page { size: A4 portrait; margin: 10mm 0; }
+    @page :first { margin-top: 0; }
 
     @media print {
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      /* content padding compensates for zero page margin */
       .dit-report { padding: 0 !important; }
-      [data-finding-card] { page-break-inside: avoid; break-inside: avoid; }
+      [data-finding-card] {
+        page-break-inside: avoid;
+        break-inside: avoid;
+        orphans: 4;
+        widows: 4;
+      }
+      figure, img { page-break-inside: avoid; break-inside: avoid; }
     }
     img { max-width: 100%; }
     figure { margin: 0; }
@@ -527,7 +555,9 @@ const PdfExport = (() => {
   async function generate(report, notes, project) {
     await _ensureLibs();
     const html = await buildHtml(report, notes, project);
-    const fname = `דוח-${report.reportNumber}-${(project?.name || 'DIT').replace(/\s+/g,'-')}`;
+    const _desc = (report.description || '').replace(/[\\/:*?"<>|]/g,'').replace(/\s+/g,' ').trim();
+    const _proj = (project?.name || 'DIT').replace(/[\\/:*?"<>|]/g,'').replace(/\s+/g,' ').trim();
+    const fname = `${_desc || ('דוח ' + report.reportNumber)} - ${_proj}`;
 
     const win = window.open('', '_blank');
     if (!win) { App.toast('יש לאפשר חלון קופץ בדפדפן'); return; }
@@ -555,7 +585,7 @@ const PdfExport = (() => {
     win.addEventListener('afterprint', () => win.close());
   }
 
-  return { generate, preview, downloadFromPreview };
+  return { generate, preview, downloadFromPreview, buildHtml };
 })();
 
 window.PdfExport = PdfExport;

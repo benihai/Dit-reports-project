@@ -33,6 +33,7 @@ const PdfMarkup = (() => {
   let _notes      = [];
   let _onSaveCallback = null;
   let _planName   = '';
+  let _textItems  = [];   // [{el, text, color, page}] — טקסטים גרירים לפני שריפה
 
   const COLORS = ['#dc2626', '#f97316', '#16a34a', '#2563eb', '#000000'];
 
@@ -159,6 +160,8 @@ const PdfMarkup = (() => {
       _toolBtn('pen',    '✏️', 'עיפרון'),
       _toolBtn('marker', '🖊️', 'מרקר'),
       _toolBtn('arrow',  '➡️', 'חץ'),
+      _toolBtn('rect',   '⬜', 'מלבן'),
+      _toolBtn('circle', '⭕', 'עיגול'),
       _toolBtn('text',   'T',  'טקסט'),
       ...(imageMode ? [] : [_toolBtn('pin', '📌', 'סיכה')]),
     ].join('');
@@ -284,8 +287,14 @@ const PdfMarkup = (() => {
   }
 
   let _arrowStart = null;
-  let _preArrowSnapshot = null;
-  let _preArrowImg = null;    // cached Image for arrow preview redraws
+  let _preSnapshot = null;   // snapshot before shape/arrow preview
+  let _preSnapImg  = null;   // decoded Image for fast redraws
+
+  function _captureSnapshot() {
+    _preSnapshot = _drawCanvas.toDataURL('image/png');
+    _preSnapImg  = new Image();
+    _preSnapImg.src = _preSnapshot;
+  }
 
   function _onDown(e) {
     if (_tool === 'text' || _tool === 'pin') return;
@@ -299,29 +308,27 @@ const PdfMarkup = (() => {
       _ctx.lineCap  = 'round';
       _ctx.lineJoin = 'round';
     }
-    if (_tool === 'arrow') {
+    if (_tool === 'arrow' || _tool === 'rect' || _tool === 'circle') {
       _arrowStart = pos;
-      _preArrowSnapshot = _drawCanvas.toDataURL('image/png');
-      // Pre-decode the snapshot once so mousemove can drawImage immediately
-      _preArrowImg = new Image();
-      _preArrowImg.src = _preArrowSnapshot;
+      _captureSnapshot();
     }
   }
 
   function _onMove(e) {
     if (!_drawing) return;
     const pos = _getPos(e);
-    _ctx.lineCap  = 'round';
-    _ctx.lineJoin = 'round';
+    _ctx.lineCap     = 'round';
+    _ctx.lineJoin    = 'round';
     _ctx.strokeStyle = _color;
+    _ctx.globalAlpha = 1;
 
     if (_tool === 'pen') {
-      _ctx.globalAlpha = 1;
-      _ctx.lineWidth   = 3;
+      _ctx.lineWidth = 3;
       _ctx.lineTo(pos.x, pos.y);
       _ctx.stroke();
       _ctx.beginPath();
       _ctx.moveTo(pos.x, pos.y);
+
     } else if (_tool === 'marker') {
       _ctx.globalAlpha = 0.4;
       _ctx.lineWidth   = 18;
@@ -329,11 +336,34 @@ const PdfMarkup = (() => {
       _ctx.stroke();
       _ctx.beginPath();
       _ctx.moveTo(pos.x, pos.y);
-    } else if (_tool === 'arrow' && _arrowStart && _preArrowImg?.complete) {
+
+    } else if (_tool === 'arrow' && _arrowStart && _preSnapImg?.complete) {
       _ctx.clearRect(0, 0, _drawCanvas.width, _drawCanvas.height);
-      _ctx.globalAlpha = 1;
-      _ctx.drawImage(_preArrowImg, 0, 0);
+      _ctx.drawImage(_preSnapImg, 0, 0);
       _drawArrow(_ctx, _arrowStart.x, _arrowStart.y, pos.x, pos.y);
+
+    } else if (_tool === 'rect' && _arrowStart && _preSnapImg?.complete) {
+      _ctx.clearRect(0, 0, _drawCanvas.width, _drawCanvas.height);
+      _ctx.drawImage(_preSnapImg, 0, 0);
+      _ctx.lineWidth = 3;
+      _ctx.strokeStyle = _color;
+      _ctx.strokeRect(
+        _arrowStart.x, _arrowStart.y,
+        pos.x - _arrowStart.x, pos.y - _arrowStart.y
+      );
+
+    } else if (_tool === 'circle' && _arrowStart && _preSnapImg?.complete) {
+      _ctx.clearRect(0, 0, _drawCanvas.width, _drawCanvas.height);
+      _ctx.drawImage(_preSnapImg, 0, 0);
+      const rx = (pos.x - _arrowStart.x) / 2;
+      const ry = (pos.y - _arrowStart.y) / 2;
+      const cx = _arrowStart.x + rx;
+      const cy = _arrowStart.y + ry;
+      _ctx.lineWidth = 3;
+      _ctx.strokeStyle = _color;
+      _ctx.beginPath();
+      _ctx.ellipse(cx, cy, Math.abs(rx), Math.abs(ry), 0, 0, Math.PI * 2);
+      _ctx.stroke();
     }
     _ctx.globalAlpha = 1;
   }
@@ -342,26 +372,152 @@ const PdfMarkup = (() => {
     if (!_drawing) return;
     _drawing = false;
     _ctx.globalAlpha = 1;
-    if (_tool === 'pen' || _tool === 'marker' || _tool === 'arrow') _pushState();
-    _arrowStart = null;
-    _preArrowSnapshot = null;
-    _preArrowImg = null;
+    if (['pen','marker','arrow','rect','circle'].includes(_tool)) _pushState();
+    _arrowStart  = null;
+    _preSnapshot = null;
+    _preSnapImg  = null;
   }
+
+  let _textInputOverlay = null;  // חלון הקלדה זמני
 
   function _onClick(e) {
     if (_tool === 'text') {
+      if (_textInputOverlay) return;
       const pos  = _getPos(e);
-      const text = prompt('הזן טקסט:');
-      if (!text) return;
-      _ctx.font         = 'bold 18px Heebo,Arial';
-      _ctx.fillStyle    = _color;
-      _ctx.direction    = 'rtl';
-      _ctx.globalAlpha  = 1;
-      _ctx.fillText(text, pos.x, pos.y);
-      _pushState();
+      const rect = _drawCanvas.getBoundingClientRect();
+      const screenX = rect.left + (pos.x / _drawCanvas.width)  * rect.width;
+      const screenY = rect.top  + (pos.y / _drawCanvas.height) * rect.height;
+      _showTextInput(screenX, screenY);
     } else if (_tool === 'pin') {
       _showPinPopup(_getPos(e), e);
     }
+  }
+
+  // ── שלב 1: חלון הקלדת טקסט ───────────────────────────────────────────────────
+  function _showTextInput(screenX, screenY) {
+    const dlg = document.createElement('div');
+    dlg.style.cssText = `
+      position:fixed; left:${screenX}px; top:${screenY}px;
+      z-index:9999; background:#fff; border:2px solid ${_color};
+      border-radius:8px; padding:10px; box-shadow:0 4px 20px rgba(0,0,0,0.2);
+      min-width:180px; font-family:'Heebo',Arial,sans-serif;
+    `;
+    dlg.innerHTML = `
+      <input id="mti-input" type="text" placeholder="הקלד טקסט..."
+        style="width:100%;border:none;outline:none;font-size:15px;font-weight:700;
+               color:${_color};direction:rtl;text-align:right;background:transparent;
+               font-family:inherit;">
+      <div style="display:flex;gap:6px;margin-top:8px;justify-content:flex-end;">
+        <button id="mti-cancel" style="padding:3px 10px;border:1px solid #ccc;
+          border-radius:5px;background:#fff;cursor:pointer;font-size:12px;">ביטול</button>
+        <button id="mti-ok" style="padding:3px 10px;background:${_color};color:#fff;
+          border:none;border-radius:5px;cursor:pointer;font-size:12px;font-weight:700;">הוסף →</button>
+      </div>
+    `;
+    document.body.appendChild(dlg);
+    _textInputOverlay = dlg;
+    setTimeout(() => document.getElementById('mti-input')?.focus(), 30);
+
+    const confirm = () => {
+      const text = document.getElementById('mti-input')?.value?.trim();
+      dlg.remove(); _textInputOverlay = null;
+      if (text) _createDraggableText(screenX, screenY, text);
+    };
+    const cancel = () => { dlg.remove(); _textInputOverlay = null; };
+
+    document.getElementById('mti-ok').onclick     = confirm;
+    document.getElementById('mti-cancel').onclick = cancel;
+    document.getElementById('mti-input').onkeydown = ev => {
+      if (ev.key === 'Enter')  confirm();
+      if (ev.key === 'Escape') cancel();
+    };
+  }
+
+  // ── שלב 2: טקסט גרירה על גבי הcanvas ────────────────────────────────────────
+  function _createDraggableText(screenX, screenY, text) {
+    const el = document.createElement('div');
+    el.className = 'markup-draggable-text';
+    el.style.cssText = `
+      position:fixed; left:${screenX}px; top:${screenY}px;
+      z-index:950; cursor:move; user-select:none;
+      font-family:'Heebo',Arial,sans-serif; font-size:20px; font-weight:700;
+      color:${_color}; direction:rtl; white-space:nowrap;
+      text-shadow:1px 1px 2px rgba(255,255,255,0.8);
+      display:flex; align-items:center; gap:6px;
+      padding:2px 4px; border-radius:3px;
+      border:1.5px dashed rgba(0,0,0,0.25);
+    `;
+    el.innerHTML = `
+      <span class="mdt-text">${text}</span>
+      <button class="mdt-del" title="מחק" style="background:rgba(220,38,38,0.85);color:#fff;
+        border:none;border-radius:50%;width:18px;height:18px;font-size:12px;cursor:pointer;
+        display:flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1;">✕</button>
+    `;
+    document.body.appendChild(el);
+
+    const item = { el, text, color: _color, page: _pageNum };
+    _textItems.push(item);
+
+    // מחיקה
+    el.querySelector('.mdt-del').addEventListener('click', ev => {
+      ev.stopPropagation();
+      el.remove();
+      _textItems = _textItems.filter(t => t !== item);
+    });
+
+    // גרירה
+    let dragging = false, ox = 0, oy = 0, sx = 0, sy = 0;
+    const onDown = ev => {
+      if (ev.target.classList.contains('mdt-del')) return;
+      dragging = true;
+      const cx = ev.clientX ?? ev.touches?.[0]?.clientX;
+      const cy = ev.clientY ?? ev.touches?.[0]?.clientY;
+      ox = parseInt(el.style.left); oy = parseInt(el.style.top);
+      sx = cx; sy = cy;
+      ev.preventDefault();
+    };
+    const onMove = ev => {
+      if (!dragging) return;
+      const cx = ev.clientX ?? ev.touches?.[0]?.clientX;
+      const cy = ev.clientY ?? ev.touches?.[0]?.clientY;
+      el.style.left = (ox + cx - sx) + 'px';
+      el.style.top  = (oy + cy - sy) + 'px';
+    };
+    const onUp = () => { dragging = false; };
+
+    el.addEventListener('mousedown',  onDown);
+    el.addEventListener('touchstart', onDown, { passive: false });
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('mouseup',   onUp);
+    document.addEventListener('touchend',  onUp);
+  }
+
+  // ── שריפת כל הטקסטים לcanvas בעת שמירה ────────────────────────────────────
+  function _burnTextItems() {
+    const rect = _drawCanvas.getBoundingClientRect();
+    const scaleX = _drawCanvas.width  / rect.width;
+    const scaleY = _drawCanvas.height / rect.height;
+
+    _textItems.filter(t => t.page === _pageNum).forEach(item => {
+      const elRect = item.el.getBoundingClientRect();
+      const cx = (elRect.left - rect.left) * scaleX;
+      const cy = (elRect.top  - rect.top)  * scaleY;
+      _ctx.font        = 'bold 20px Heebo,Arial';
+      _ctx.fillStyle   = item.color;
+      _ctx.direction   = 'rtl';
+      _ctx.globalAlpha = 1;
+      _ctx.fillText(item.text, cx + elRect.width * scaleX / 2, cy + 22);
+      item.el.remove();
+    });
+    _textItems = _textItems.filter(t => t.page !== _pageNum);
+  }
+
+  function _closeTextOverlay() {
+    _textInputOverlay?.remove();
+    _textInputOverlay = null;
+    _textItems.forEach(t => t.el.remove());
+    _textItems = [];
   }
 
   // ── STROKE STATE STACK ───────────────────────────────────────────────────────
@@ -487,7 +643,7 @@ const PdfMarkup = (() => {
     document.querySelectorAll('[id^="tool-btn-"]').forEach(btn => {
       btn.classList.toggle('active', btn.id === `tool-btn-${t}`);
     });
-    _drawCanvas.style.cursor = t === 'text' ? 'text' : 'crosshair';
+    _drawCanvas.style.cursor = t === 'text' ? 'text' : t === 'pin' ? 'cell' : 'crosshair';
   }
 
   function setColor(c) {
@@ -513,6 +669,7 @@ const PdfMarkup = (() => {
   async function save() {
     App.showLoading('שומר...');
     try {
+      _burnTextItems();   // שרוף טקסטים גרירים לcanvas לפני ייצוא
       const composite = document.createElement('canvas');
       composite.width  = _pdfCanvas.width;
       composite.height = _pdfCanvas.height;
@@ -532,6 +689,7 @@ const PdfMarkup = (() => {
 
   function close() {
     document.removeEventListener('keydown', _onKey);
+    _closeTextOverlay();   // מנקה גם textInputOverlay וגם textItems
     const screen = document.getElementById('markup-screen');
     screen.classList.add('hidden');
     screen.innerHTML = '';

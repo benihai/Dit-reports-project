@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## שפת תקשורת — חובה
+
+**תמיד כתוב תשובות בעברית, מימין לשמאל (RTL).** השתמש בעברית בכל התקשורת עם המשתמש.
+
 ## Git Workflow — MANDATORY
 
 **Always push changes to `staging` first, then ask the user if they want to merge to `main`.**
@@ -47,6 +51,14 @@ Three-tier cache: memory (90s TTL) → Supabase network → localforage (Indexed
 - `viewer` → sees ViewerReportsView (only permitted reports) → ReportView (read-only)
 
 Role is stored in `profiles.role` in Supabase. `Auth.isAdmin()` reads `_currentProfile.role`.
+
+### PDF Upload — תוכניות (`reports.js`)
+העלאת PDF מבצעת המרה לתמונות JPEG עם הגדרות קבועות:
+- `scale ≤ 1400px` (רוחב/גובה מקסימלי לעמוד)
+- `quality 0.72` (דחיסת JPEG)
+- טעינת `pdfjs-dist@3.11.174` באופן lazy (רק בעת שימוש ראשון)
+
+**אין לשנות הגדרות אלה ללא אישור מפורש.**
 
 ### PDF Export (`pdfExport.js`)
 Libraries (html2canvas, jsPDF, QRCode) are loaded lazily on first use. Flow: `buildHtml()` → `_showPreviewOverlay()` → user clicks download → `generate()` slices canvas into A4 pages.
