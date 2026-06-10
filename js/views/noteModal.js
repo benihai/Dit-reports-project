@@ -8,8 +8,10 @@ const NoteModal = (() => {
   let _projectPlans = [];
 
   function escHtml(s) {
-    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
+
+  const _MAX_VIDEO_BYTES = 15 * 1024 * 1024;  // 15 MB — videos are stored inline as base64
 
   // ── MEDIA THUMBNAILS ─────────────────────────────────────────────────────────
   function mediaThumbHtml(item, index) {
@@ -218,6 +220,12 @@ const NoteModal = (() => {
       const type = typeHint === 'auto'
         ? (file.type.startsWith('video/') ? 'video' : 'image')
         : typeHint;
+      // Videos are embedded inline (base64) in the note row — block oversized
+      // files that would bloat the DB row and slow every load of this report.
+      if (type === 'video' && file.size > _MAX_VIDEO_BYTES) {
+        App.toast(`הסרטון "${file.name}" גדול מדי (מעל 15MB) — צלם סרטון קצר יותר`);
+        return;
+      }
       const reader = new FileReader();
       reader.onload = async ev => {
         let data = ev.target.result;

@@ -2,7 +2,7 @@ const ReportsView = (() => {
   let _projectId = null;
 
   function escHtml(s) {
-    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
   function formatDate(d) {
@@ -107,9 +107,7 @@ const ReportsView = (() => {
       Storage.Reports.getForProject(projectId),
       Storage.Plans.getForProject(projectId),
     ]);
-    const noteCounts = await Promise.all(
-      reports.map(r => Storage.Notes.getForReport(r.id).then(l => l.length))
-    );
+    const noteCounts = await Storage.Notes.countsForReports(reports.map(r => r.id));
 
     const container = document.getElementById('view-container');
 
@@ -146,7 +144,7 @@ const ReportsView = (() => {
            <span>דוחות סיור</span>
            <span class="badge badge-gray">${reports.length}</span>
          </div>
-         ${reports.map((r, i) => reportCardHtml(r, noteCounts[i])).join('')}`;
+         ${reports.map(r => reportCardHtml(r, noteCounts[r.id] || 0)).join('')}`;
 
     container.innerHTML = breadcrumb + logoHtml + reportsHtml + planLibrarySectionHtml(plans);
   }

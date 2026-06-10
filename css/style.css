@@ -89,6 +89,11 @@ body {
   transform: translateX(-50%);
   white-space: nowrap;
   display: none;
+  /* Stay centered without colliding with the back button / action buttons on
+     either side; long titles are truncated with an ellipsis instead. */
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 #header-title.visible { display: block; }
 

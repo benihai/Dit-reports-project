@@ -1,7 +1,7 @@
 const ProjectsView = (() => {
 
   function escHtml(s) {
-    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
   function logoHtml(project) {
@@ -63,10 +63,8 @@ const ProjectsView = (() => {
       </button>
     `);
 
-    // Fetch all report counts in parallel
-    const counts = await Promise.all(
-      projects.map(p => Storage.Reports.getForProject(p.id).then(l => l.length))
-    );
+    // Report counts for all projects in a single query
+    const counts = await Storage.Reports.countsForProjects(projects.map(p => p.id));
 
     const container = document.getElementById('view-container');
 
@@ -100,7 +98,7 @@ const ProjectsView = (() => {
         <span>פרויקטים</span>
         <span class="badge badge-gray">${projects.length}</span>
       </div>
-      ${projects.map((p, i) => projectCardHtml(p, counts[i])).join('')}
+      ${projects.map(p => projectCardHtml(p, counts[p.id] || 0)).join('')}
     `;
   }
 
@@ -108,6 +106,7 @@ const ProjectsView = (() => {
     const project = await Storage.Projects.get(id);
     if (!project) return;
 
+    _pendingLogo = null;   // reset any logo staged from a previous (cancelled) edit
     let _editLogo = project.logoData || null;
 
     let overlay = document.getElementById('edit-project-overlay');
@@ -169,7 +168,6 @@ const ProjectsView = (() => {
     overlay.onclick = e => { if (e.target === overlay) overlay.classList.add('hidden'); };
     setTimeout(() => {
       document.getElementById('ep-name')?.focus();
-      _pendingContacts = null;
       _renderEpContacts(project.contacts || []);
     }, 0);
   }
@@ -226,8 +224,7 @@ const ProjectsView = (() => {
   }
 
   // Called from inline onchange — store logo in a module-level temp var
-  let _pendingLogo     = null;
-  let _pendingContacts = null;
+  let _pendingLogo = null;
 
   function _onEditLogo(e, projectId) {
     const file = e.target.files[0];
@@ -286,8 +283,6 @@ const ProjectsView = (() => {
       document.getElementById('edit-project-overlay')?.classList.add('hidden');
       _pendingLogo = null;
       // Refresh the current view
-      const vc = document.getElementById('view-container');
-      const breadcrumbItem = vc?.querySelector('.breadcrumb-current');
       const personId = project.personId;
       if (personId) await render({ personId });
     } catch (err) {

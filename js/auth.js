@@ -30,27 +30,16 @@ const Auth = (() => {
         ]);
       } catch (_) {}
     }
-    if (!_currentProfile && _currentUser) {
-      _currentProfile = await _bootstrapProfile();
-    }
+    // No client-side profile creation: provisioning is handled by the
+    // `handle_new_user` DB trigger at signup. If no profile exists here, the
+    // account was removed by an admin (or the trigger failed) — do NOT recreate
+    // it, otherwise a "deleted" user would silently resurrect with default access.
     return _currentProfile;
   }
 
   function _metaPersonId() {
     const raw = _currentUser?.user_metadata?.person_id;
     return raw && String(raw).trim() ? String(raw).trim() : null;
-  }
-
-  function _profileFromUser() {
-    const meta = _currentUser.user_metadata || {};
-    const role = ['admin', 'user', 'viewer'].includes(meta.role) ? meta.role : 'user';
-    return {
-      id: _currentUser.id,
-      email: _currentUser.email || null,
-      name: meta.name || _currentUser.email || 'משתמש',
-      role,
-      person_id: _metaPersonId(),
-    };
   }
 
   async function _syncMissingFields(profile) {
@@ -72,23 +61,6 @@ const Auth = (() => {
     return (!error && data) ? data : profile;
   }
 
-  async function _bootstrapProfile() {
-    if (!_currentUser) return null;
-    const row = _profileFromUser();
-    const { data, error } = await _supabase
-      .from('profiles')
-      .insert(row)
-      .select()
-      .single();
-    if (!error && data) return data;
-    const { data: existing } = await _supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', _currentUser.id)
-      .maybeSingle();
-    return existing ? _syncMissingFields(existing) : null;
-  }
-
   async function _loadProfile() {
     if (!_currentUser) return null;
     const { data, error } = await _supabase
@@ -100,8 +72,9 @@ const Auth = (() => {
       _currentProfile = await _syncMissingFields(data);
       return _currentProfile;
     }
-    _currentProfile = await _bootstrapProfile();
-    return _currentProfile;
+    // No row → account not provisioned / removed by admin. Do not recreate.
+    _currentProfile = null;
+    return null;
   }
 
   async function login(email, password) {
@@ -142,6 +115,9 @@ const Auth = (() => {
     if (isAdmin()) return true;
     const report = await Storage.Reports.get(reportId);
     if (!report) return false;
+    // Viewers gain access via report_permissions — RLS only returns a report
+    // row here if the viewer is permitted, so a non-null result means allowed.
+    if (_currentProfile?.role === 'viewer') return true;
     return canAccessProject(report.projectId);
   }
 

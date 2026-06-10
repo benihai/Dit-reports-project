@@ -1,7 +1,7 @@
 const UserHomeView = (() => {
 
   function escHtml(s) {
-    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
   function logoHtml(project) {
@@ -80,9 +80,7 @@ const UserHomeView = (() => {
       Storage.Projects.getForPerson(personId),
     ]);
 
-    const counts = await Promise.all(
-      projects.map(p => Storage.Reports.getForProject(p.id).then(l => l.length))
-    );
+    const counts = await Storage.Reports.countsForProjects(projects.map(p => p.id));
 
     const projectsHtml = projects.length === 0
       ? `<div class="empty-state user-home-empty">
@@ -94,7 +92,7 @@ const UserHomeView = (() => {
            <h3>אין פרויקטים עדיין</h3>
            <p>לחץ על "+ פרויקט" להתחלה</p>
          </div>`
-      : projects.map((p, i) => projectCardHtml(p, counts[i], personId)).join('');
+      : projects.map(p => projectCardHtml(p, counts[p.id] || 0, personId)).join('');
 
     container.innerHTML = `
       <div class="welcome-banner user-home-welcome">

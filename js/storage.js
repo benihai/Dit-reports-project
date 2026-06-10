@@ -19,7 +19,18 @@ const Storage = (() => {
   async function _lfGet(k) {
     try { return await localforage.getItem('dc:' + k); } catch { return null; }
   }
-  function _lfSet(k, d) { localforage.setItem('dc:' + k, d).catch(() => {}); }
+  // Skip persisting very large payloads (plans with full-page images, notes with
+  // embedded media) to IndexedDB — they would grow offline storage unbounded.
+  // Such data stays in the session memory cache and is re-fetched from the
+  // network when needed; only lighter data is kept for true offline use.
+  const _LF_MAX_CHARS = 3_000_000;  // ~3 MB serialized per key
+  function _lfSet(k, d) {
+    try {
+      const s = (d == null) ? '' : (typeof d === 'string' ? d : JSON.stringify(d));
+      if (s.length > _LF_MAX_CHARS) return;
+    } catch (_) { /* unserialisable — fall through and let localforage try */ }
+    localforage.setItem('dc:' + k, d).catch(() => {});
+  }
 
   // Try memory → network (cache result) → localforage offline fallback
   async function _query(key, fn) {
@@ -111,32 +122,67 @@ const Storage = (() => {
   // ── Pending writes queue (offline-first sync) ───────────────────────────
   const _pending = {};
   let _syncing = false;
+  const _MAX_SYNC_ATTEMPTS = 3;
+  let _notifiedSyncFailure = false;
+
+  function _persistPending() { localforage.setItem('dc:pending', _pending).catch(() => {}); }
 
   function _enqueuePendingWrite(type, data) {
-    _pending[`${type}_${data.id}`] = { type, data };
-    localforage.setItem('dc:pending', _pending).catch(() => {});
+    _pending[`${type}_${data.id}`] = { type, data, attempts: 0, failed: false };
+    _persistPending();
   }
 
   function _dequeuePendingWrite(key) {
     delete _pending[key];
-    localforage.setItem('dc:pending', _pending).catch(() => {});
+    _persistPending();
+  }
+
+  // Surface a sync failure to the user once (debounced) — so they know that a
+  // change which appeared saved did NOT actually persist on the server.
+  function _notifySyncFailure() {
+    if (_notifiedSyncFailure) return;
+    _notifiedSyncFailure = true;
+    if (typeof App !== 'undefined' && App.toast) {
+      App.toast('⚠️ חלק מהשינויים לא נשמרו בשרת — בדוק חיבור או הרשאות');
+    }
+    setTimeout(() => { _notifiedSyncFailure = false; }, 30_000);
   }
 
   async function _flushPendingWrites() {
     if (_syncing || !navigator.onLine) return;
     _syncing = true;
-    for (const [key, item] of Object.entries(_pending)) {
-      try {
-        if (item.type === 'note') {
-          const { error } = await _supabase.from('notes').upsert(noteToRow(item.data));
-          if (!error) _dequeuePendingWrite(key);
-        } else if (item.type === 'report') {
-          const { error } = await _supabase.from('reports').upsert(reportToRow(item.data));
-          if (!error) _dequeuePendingWrite(key);
+    try {
+      for (const [key, item] of Object.entries(_pending)) {
+        const table = item.type === 'note' ? 'notes'
+                    : item.type === 'report' ? 'reports' : null;
+        if (!table) { _dequeuePendingWrite(key); continue; }
+        const row = item.type === 'note' ? noteToRow(item.data) : reportToRow(item.data);
+
+        let serverError = null;
+        try {
+          const { error } = await _supabase.from(table).upsert(row);
+          serverError = error;
+        } catch (_) {
+          // Network/transport failure — stop; retry on the next online event.
+          break;
         }
-      } catch (_) {}
+
+        if (!serverError) {
+          _dequeuePendingWrite(key);          // synced successfully
+        } else {
+          // Server rejected the write (RLS, constraint, …). Retry a few times,
+          // then flag it and tell the user it is NOT saved on the server.
+          item.attempts = (item.attempts || 0) + 1;
+          if (item.attempts >= _MAX_SYNC_ATTEMPTS && !item.failed) {
+            item.failed = true;
+            _persistPending();
+            _notifySyncFailure();
+          }
+        }
+      }
+    } finally {
+      _syncing = false;
     }
-    _syncing = false;
   }
 
   // Load persisted pending writes on startup and flush if online
@@ -221,6 +267,23 @@ const Storage = (() => {
         return (data || []).map(mapReport);
       });
     },
+    // Lightweight report-count-per-project in ONE query (avoids N+1 + pulling
+    // full report rows just to count). Falls back to per-project on error.
+    async countsForProjects(projectIds) {
+      const ids = (projectIds || []).filter(Boolean);
+      const counts = {};
+      ids.forEach(id => { counts[id] = 0; });
+      if (!ids.length) return counts;
+      try {
+        const { data, error } = await _supabase.from('reports').select('project_id').in('project_id', ids);
+        throwIf(error);
+        (data || []).forEach(r => { counts[r.project_id] = (counts[r.project_id] || 0) + 1; });
+        return counts;
+      } catch (_) {
+        await Promise.all(ids.map(async id => { counts[id] = (await Reports.getForProject(id)).length; }));
+        return counts;
+      }
+    },
     async get(id) {
       return _query(`report_${id}`, async () => {
         const { data, error } = await _supabase.from('reports').select('*').eq('id', id).maybeSingle();
@@ -247,6 +310,12 @@ const Storage = (() => {
     },
     async delete(id) {
       _mClear(`reports_`, `report_${id}`);
+      // Drop any queued writes for this report (and its notes) so a background
+      // sync cannot recreate what the user just deleted.
+      _dequeuePendingWrite('report_' + id);
+      Object.entries(_pending)
+        .filter(([, w]) => w.type === 'note' && w.data?.reportId === id)
+        .forEach(([k]) => _dequeuePendingWrite(k));
       const { error } = await _supabase.from('reports').delete().eq('id', id);
       throwIf(error);
     },
@@ -291,6 +360,23 @@ const Storage = (() => {
         return (data || []).map(mapNote);
       });
     },
+    // Lightweight note-count-per-report in ONE query — selects only report_id, so
+    // it does NOT pull the heavy media payloads just to count. Falls back per-report.
+    async countsForReports(reportIds) {
+      const ids = (reportIds || []).filter(Boolean);
+      const counts = {};
+      ids.forEach(id => { counts[id] = 0; });
+      if (!ids.length) return counts;
+      try {
+        const { data, error } = await _supabase.from('notes').select('report_id').in('report_id', ids);
+        throwIf(error);
+        (data || []).forEach(n => { counts[n.report_id] = (counts[n.report_id] || 0) + 1; });
+        return counts;
+      } catch (_) {
+        await Promise.all(ids.map(async id => { counts[id] = (await Notes.getForReport(id)).length; }));
+        return counts;
+      }
+    },
     async get(id) {
       const { data, error } = await _supabase.from('notes').select('*').eq('id', id).maybeSingle();
       throwIf(error);
@@ -313,6 +399,7 @@ const Storage = (() => {
     async delete(id) {
       // We don't know reportId here, so clear all note caches
       _mClear('notes_');
+      _dequeuePendingWrite('note_' + id);   // prevent a queued write from recreating it
       const { error } = await _supabase.from('notes').delete().eq('id', id);
       throwIf(error);
     }

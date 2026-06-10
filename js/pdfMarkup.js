@@ -458,13 +458,6 @@ const PdfMarkup = (() => {
     const item = { el, text, color: _color, page: _pageNum };
     _textItems.push(item);
 
-    // מחיקה
-    el.querySelector('.mdt-del').addEventListener('click', ev => {
-      ev.stopPropagation();
-      el.remove();
-      _textItems = _textItems.filter(t => t !== item);
-    });
-
     // גרירה
     let dragging = false, ox = 0, oy = 0, sx = 0, sy = 0;
     const onDown = ev => {
@@ -491,6 +484,23 @@ const PdfMarkup = (() => {
     document.addEventListener('touchmove', onMove, { passive: false });
     document.addEventListener('mouseup',   onUp);
     document.addEventListener('touchend',  onUp);
+
+    // Detach the document-level drag listeners when this text is removed/burned —
+    // otherwise every text would leak 4 listeners that persist after the screen closes.
+    item._detach = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('mouseup',   onUp);
+      document.removeEventListener('touchend',  onUp);
+    };
+
+    // מחיקה
+    el.querySelector('.mdt-del').addEventListener('click', ev => {
+      ev.stopPropagation();
+      item._detach();
+      el.remove();
+      _textItems = _textItems.filter(t => t !== item);
+    });
   }
 
   // ── שריפת כל הטקסטים לcanvas בעת שמירה ────────────────────────────────────
@@ -499,7 +509,8 @@ const PdfMarkup = (() => {
     const scaleX = _drawCanvas.width  / rect.width;
     const scaleY = _drawCanvas.height / rect.height;
 
-    _textItems.filter(t => t.page === _pageNum).forEach(item => {
+    const onPage = _textItems.filter(t => t.page === _pageNum);
+    onPage.forEach(item => {
       const elRect = item.el.getBoundingClientRect();
       const cx = (elRect.left - rect.left) * scaleX;
       const cy = (elRect.top  - rect.top)  * scaleY;
@@ -508,15 +519,17 @@ const PdfMarkup = (() => {
       _ctx.direction   = 'rtl';
       _ctx.globalAlpha = 1;
       _ctx.fillText(item.text, cx + elRect.width * scaleX / 2, cy + 22);
+      item._detach?.();
       item.el.remove();
     });
     _textItems = _textItems.filter(t => t.page !== _pageNum);
+    return onPage.length;
   }
 
   function _closeTextOverlay() {
     _textInputOverlay?.remove();
     _textInputOverlay = null;
-    _textItems.forEach(t => t.el.remove());
+    _textItems.forEach(t => { t._detach?.(); t.el.remove(); });
     _textItems = [];
   }
 
@@ -602,12 +615,25 @@ const PdfMarkup = (() => {
     closePinPopup();
     _pins.push({ x, y, noteId, color: _color, page: _pageNum });
     _renderPins();
+    const note  = _notes.find(n => n.id === noteId);
+    const label = String(note?.noteNumber || '');
     _ctx.beginPath();
-    _ctx.arc(x, y, 10, 0, Math.PI * 2);
+    _ctx.arc(x, y, 11, 0, Math.PI * 2);
     _ctx.fillStyle   = _color;
-    _ctx.globalAlpha = 0.7;
+    _ctx.globalAlpha = 0.85;
     _ctx.fill();
     _ctx.globalAlpha = 1;
+    // Burn the finding number INTO the canvas so it survives export (the DOM pin
+    // marker is not part of the saved image).
+    if (label) {
+      _ctx.fillStyle    = '#ffffff';
+      _ctx.font         = 'bold 12px Heebo,Arial';
+      _ctx.textAlign    = 'center';
+      _ctx.textBaseline = 'middle';
+      _ctx.fillText(label, x, y + 1);
+      _ctx.textAlign    = 'start';
+      _ctx.textBaseline = 'alphabetic';
+    }
     _pushState();
   }
 
@@ -655,12 +681,14 @@ const PdfMarkup = (() => {
 
   async function prevPage() {
     if (_pageNum <= 1) return;
+    if (_burnTextItems() > 0) _pushState();   // fix any text into this page before leaving
     _pageNum--;
     await _renderPage(_pageNum);
   }
 
   async function nextPage() {
     if (_pageNum >= _totalPages) return;
+    if (_burnTextItems() > 0) _pushState();
     _pageNum++;
     await _renderPage(_pageNum);
   }

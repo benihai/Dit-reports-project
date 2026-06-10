@@ -1,6 +1,7 @@
 const EmailShare = (() => {
 
   let _report = null, _notes = null, _project = null;
+  let _missingImages = 0;   // images that failed to load and were left out of the PDF
   const _loaded = {};
 
   function esc(s) {
@@ -82,7 +83,8 @@ const EmailShare = (() => {
     container.innerHTML = html;
     document.body.appendChild(container);
 
-    // המר תמונות ל-data URL למנוע "tainted canvas"
+    // המר תמונות ל-data URL למנוע "tainted canvas"; ספור תמונות שנכשלו
+    _missingImages = 0;
     await Promise.all(Array.from(container.querySelectorAll('img')).map(async img => {
       if (!img.src || img.src.startsWith('data:')) return;
       try {
@@ -95,7 +97,7 @@ const EmailShare = (() => {
           fr.onerror = rej;
           fr.readAsDataURL(blob);
         });
-      } catch { img.style.display = 'none'; }
+      } catch { img.style.display = 'none'; _missingImages++; }
     }));
 
     await new Promise(r => setTimeout(r, 400));
@@ -213,7 +215,9 @@ const EmailShare = (() => {
 
       setTimeout(() => { window.location.href = mailto; }, 500);
 
-      App.toast('📎 ה-PDF הורד — גרור אותו לתוך המייל שנפתח ולחץ שלח');
+      App.toast(_missingImages > 0
+        ? `📎 ה-PDF הורד — שים לב: ${_missingImages} תמונות לא נכללו (טעינתן נכשלה)`
+        : '📎 ה-PDF הורד — גרור אותו לתוך המייל שנפתח ולחץ שלח');
 
     } catch (err) {
       App.hideLoading();

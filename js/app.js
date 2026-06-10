@@ -43,6 +43,8 @@ const App = (() => {
     overlay.classList.remove('hidden');
     document.getElementById('confirm-yes').onclick = () => { overlay.classList.add('hidden'); onYes(); };
     document.getElementById('confirm-no').onclick  = () => overlay.classList.add('hidden');
+    // Click on the dark backdrop = cancel (the inner box stops propagation)
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.classList.add('hidden'); };
   }
 
   function showLoading(text = 'אנא המתן...') {
@@ -182,6 +184,10 @@ const App = (() => {
         _safeRender(() => PeopleView.render({ headerActionsHtml: header }));
         return;
       }
+      if (Auth.getProfile()?.role === 'viewer') {
+        _safeRender(() => ViewerReportsView.render());
+        return;
+      }
       const personId = Auth.getAssignedPersonId();
       if (personId) {
         _safeRender(() => UserHomeView.render());
@@ -213,7 +219,8 @@ const App = (() => {
     });
 
     Router.register('/report/:reportId', (p) => {
-      _safeRender(() => _guardReport(p.reportId, () => ReportView.render(p)));
+      const readOnly = Auth.getProfile()?.role === 'viewer';
+      _safeRender(() => _guardReport(p.reportId, () => ReportView.render(p, { readOnly })));
     });
 
     Router.register('/admin', () => {
@@ -271,7 +278,10 @@ const App = (() => {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js').catch(() => {});
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        window.location.reload();
+        // Only auto-reload before the user starts working (login/loading screen).
+        // Reloading mid-session would discard unsaved edits — let the fresh code
+        // apply on the next natural load instead.
+        if (!_appStarted) window.location.reload();
       });
     }
 
