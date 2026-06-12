@@ -120,78 +120,127 @@ const Storage = (() => {
   }
 
   // ── Pending writes queue (offline-first sync) ───────────────────────────
+  // Each queued op: { type, op, data, attempts, ts, status }
+  //   type : 'note' | 'report' | 'project'   (which Supabase table)
+  //   op   : 'upsert' | 'delete'
+  //
+  // Conflict policy: Last-Write-Wins — `upsert` overwrites the whole server
+  // row, so the newest write to reach the server wins. Ops are keyed by
+  // `${type}_${id}`, so a later edit/delete of the same record collapses onto
+  // the earlier one (newest intent wins, queue stays small).
+  //
+  // Error handling: a network failure mid-flush stops the loop and keeps the
+  // queue intact for the next 'online' / Background-Sync tick. A *server*
+  // rejection (validation / RLS / conflict) increments `attempts`; after
+  // _MAX_ATTEMPTS the op is parked as `status:'failed'` (dead-letter) so a
+  // single bad row can never block the rest of the queue forever.
   const _pending = {};
   let _syncing = false;
-  const _MAX_SYNC_ATTEMPTS = 3;
-  let _notifiedSyncFailure = false;
+  const _MAX_ATTEMPTS = 5;
 
-  function _persistPending() { localforage.setItem('dc:pending', _pending).catch(() => {}); }
+  // type → { table, toRow } for the sync loop.
+  const _SYNC_TABLES = {
+    note:    { table: 'notes',    toRow: noteToRow },
+    report:  { table: 'reports',  toRow: reportToRow },
+    project: { table: 'projects', toRow: projectToRow },
+  };
 
-  function _enqueuePendingWrite(type, data) {
-    _pending[`${type}_${data.id}`] = { type, data, attempts: 0, failed: false };
-    _persistPending();
+  function _syncStats() {
+    const all = Object.values(_pending);
+    return {
+      online:  navigator.onLine,
+      syncing: _syncing,
+      pending: all.filter(w => w.status !== 'failed').length,
+      failed:  all.filter(w => w.status === 'failed').length,
+    };
+  }
+
+  // Broadcast queue state so the UI (NetStatus) can render "syncing… (N)".
+  function _emitSyncState() {
+    try { window.dispatchEvent(new CustomEvent('dc:syncstate', { detail: _syncStats() })); }
+    catch (_) {}
+  }
+
+  function _persistQueue() { localforage.setItem('dc:pending', _pending).catch(() => {}); }
+
+  // Ask the Service Worker to wake us when connectivity returns, even if the
+  // tab is backgrounded. Progressive enhancement — unsupported on iOS Safari,
+  // where the 'online' listener below is the reliable fallback.
+  function _registerBgSync() {
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.ready
+      .then(reg => reg.sync && reg.sync.register('dc-sync'))
+      .catch(() => {});
+  }
+
+  function _enqueuePendingWrite(type, op, data) {
+    _pending[`${type}_${data.id}`] = { type, op, data, attempts: 0, ts: Date.now() };
+    _persistQueue();
+    _emitSyncState();
+    _registerBgSync();
   }
 
   function _dequeuePendingWrite(key) {
     delete _pending[key];
-    _persistPending();
-  }
-
-  // Surface a sync failure to the user once (debounced) — so they know that a
-  // change which appeared saved did NOT actually persist on the server.
-  function _notifySyncFailure() {
-    if (_notifiedSyncFailure) return;
-    _notifiedSyncFailure = true;
-    if (typeof App !== 'undefined' && App.toast) {
-      App.toast('⚠️ חלק מהשינויים לא נשמרו בשרת — בדוק חיבור או הרשאות');
-    }
-    setTimeout(() => { _notifiedSyncFailure = false; }, 30_000);
+    _persistQueue();
+    _emitSyncState();
   }
 
   async function _flushPendingWrites() {
     if (_syncing || !navigator.onLine) return;
+    const keys = Object.keys(_pending).filter(k => _pending[k].status !== 'failed');
+    if (keys.length === 0) return;
     _syncing = true;
-    try {
-      for (const [key, item] of Object.entries(_pending)) {
-        const table = item.type === 'note' ? 'notes'
-                    : item.type === 'report' ? 'reports' : null;
-        if (!table) { _dequeuePendingWrite(key); continue; }
-        const row = item.type === 'note' ? noteToRow(item.data) : reportToRow(item.data);
-
-        let serverError = null;
-        try {
-          const { error } = await _supabase.from(table).upsert(row);
-          serverError = error;
-        } catch (_) {
-          // Network/transport failure — stop; retry on the next online event.
-          break;
-        }
-
-        if (!serverError) {
-          _dequeuePendingWrite(key);          // synced successfully
+    _emitSyncState();
+    for (const key of keys) {
+      const item = _pending[key];
+      const cfg  = _SYNC_TABLES[item.type];
+      if (!cfg) { _dequeuePendingWrite(key); continue; }
+      try {
+        const { error } = item.op === 'delete'
+          ? await _supabase.from(cfg.table).delete().eq('id', item.data.id)
+          : await _supabase.from(cfg.table).upsert(cfg.toRow(item.data));
+        if (!error) {
+          _dequeuePendingWrite(key);
         } else {
-          // Server rejected the write (RLS, constraint, …). Retry a few times,
-          // then flag it and tell the user it is NOT saved on the server.
-          item.attempts = (item.attempts || 0) + 1;
-          if (item.attempts >= _MAX_SYNC_ATTEMPTS && !item.failed) {
-            item.failed = true;
-            _persistPending();
-            _notifySyncFailure();
-          }
+          // Server reachable but rejected the row — count it, park if exhausted.
+          item.attempts++;
+          if (item.attempts >= _MAX_ATTEMPTS) item.status = 'failed';
+          _persistQueue();
         }
+      } catch (_) {
+        // Network error mid-flush → stop, keep queue, retry on next tick.
+        break;
       }
-    } finally {
-      _syncing = false;
     }
+    _syncing = false;
+    _emitSyncState();
+  }
+
+  // Re-arm parked (failed) ops — for a "retry sync" affordance in the UI.
+  function retryFailedWrites() {
+    Object.values(_pending).forEach(w => {
+      if (w.status === 'failed') { delete w.status; w.attempts = 0; }
+    });
+    _persistQueue();
+    _flushPendingWrites();
   }
 
   // Load persisted pending writes on startup and flush if online
   localforage.getItem('dc:pending').then(saved => {
     if (saved && typeof saved === 'object') Object.assign(_pending, saved);
+    _emitSyncState();
     _flushPendingWrites();
   }).catch(() => {});
 
   window.addEventListener('online', () => _flushPendingWrites());
+
+  // Background Sync API: the SW posts {type:'dc:flush'} on its 'sync' event.
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', e => {
+      if (e.data && e.data.type === 'dc:flush') _flushPendingWrites();
+    });
+  }
 
   function generateId() {
     return Date.now().toString(36) + Math.random().toString(36).substr(2, 6);
@@ -245,11 +294,21 @@ const Storage = (() => {
       });
     },
     async save(project) {
-      _mClear(`projects_${project.personId}`, `project_${project.id}`);
-      const row = projectToRow(project);
-      const { data, error } = await _supabase.from('projects').upsert(row).select().single();
-      throwIf(error);
-      return mapProject(data);
+      // Optimistic local-first (same pattern as Reports/Notes) so creating a
+      // project works fully offline; the row syncs when connectivity returns.
+      const listKey = `projects_${project.personId}`;
+      const itemKey = `project_${project.id}`;
+      const cachedList = _mGet(listKey) || await _lfGet(listKey) || [];
+      const updatedList = cachedList.some(p => p.id === project.id)
+        ? cachedList.map(p => p.id === project.id ? project : p)
+        : [project, ...cachedList];
+      _mSet(listKey, updatedList);
+      _mSet(itemKey, project);
+      _lfSet(listKey, updatedList);
+      _lfSet(itemKey, project);
+      _enqueuePendingWrite('project', 'upsert', project);
+      _flushPendingWrites();
+      return project;
     },
     async delete(id) {
       _mClear(`projects_`, `project_${id}`);
@@ -304,28 +363,38 @@ const Storage = (() => {
       _lfSet(listKey, updatedList);
       _lfSet(itemKey, report);
       // Sync to Supabase in background
-      _enqueuePendingWrite('report', report);
+      _enqueuePendingWrite('report', 'upsert', report);
       _flushPendingWrites();
       return report;
     },
-    async delete(id) {
-      _mClear(`reports_`, `report_${id}`);
-      // Drop any queued writes for this report (and its notes) so a background
-      // sync cannot recreate what the user just deleted.
-      _dequeuePendingWrite('report_' + id);
+    async delete(id, projectId) {
+      // Optimistic offline-first: drop from cache, queue the delete.
+      if (projectId) {
+        const key = `reports_${projectId}`;
+        const cached = _mGet(key) || await _lfGet(key) || [];
+        const updated = cached.filter(r => r.id !== id);
+        _mSet(key, updated);
+        _lfSet(key, updated);
+      } else {
+        _mClear('reports_');
+      }
+      _mClear(`report_${id}`);
+      // Drop any queued note writes for this report so a later sync can't
+      // recreate notes under a report the user just deleted. (The report's own
+      // queued upsert is replaced by the 'delete' op below — same queue key.)
       Object.entries(_pending)
-        .filter(([, w]) => w.type === 'note' && w.data?.reportId === id)
+        .filter(([, w]) => w.type === 'note' && w.op !== 'delete' && w.data?.reportId === id)
         .forEach(([k]) => _dequeuePendingWrite(k));
-      const { error } = await _supabase.from('reports').delete().eq('id', id);
-      throwIf(error);
+      _enqueuePendingWrite('report', 'delete', { id });
+      _flushPendingWrites();
     },
     async getNextNumber(projectId) {
       let max = 0;
       // Check local cache (includes offline-created reports)
       const cached = _mGet(`reports_${projectId}`) || await _lfGet(`reports_${projectId}`) || [];
       cached.forEach(r => { max = Math.max(max, r.reportNumber || 0); });
-      // Also check pending writes
-      Object.values(_pending).filter(w => w.type === 'report' && w.data.projectId === projectId)
+      // Also check pending writes (skip queued deletes — they carry only {id})
+      Object.values(_pending).filter(w => w.type === 'report' && w.op !== 'delete' && w.data.projectId === projectId)
         .forEach(w => { max = Math.max(max, w.data.reportNumber || 0); });
       if (navigator.onLine) {
         try {
@@ -392,16 +461,25 @@ const Storage = (() => {
       _mSet(key, updated);
       _lfSet(key, updated);
       // Sync to Supabase in background
-      _enqueuePendingWrite('note', note);
+      _enqueuePendingWrite('note', 'upsert', note);
       _flushPendingWrites();
       return note;
     },
-    async delete(id) {
-      // We don't know reportId here, so clear all note caches
-      _mClear('notes_');
-      _dequeuePendingWrite('note_' + id);   // prevent a queued write from recreating it
-      const { error } = await _supabase.from('notes').delete().eq('id', id);
-      throwIf(error);
+    async delete(id, reportId) {
+      // Optimistic offline-first: drop from cache, queue the delete.
+      // reportId lets us update the exact list cache; without it we fall back
+      // to clearing all note caches (still correct, just less granular).
+      if (reportId) {
+        const key = `notes_${reportId}`;
+        const cached = _mGet(key) || await _lfGet(key) || [];
+        const updated = cached.filter(n => n.id !== id);
+        _mSet(key, updated);
+        _lfSet(key, updated);
+      } else {
+        _mClear('notes_');
+      }
+      _enqueuePendingWrite('note', 'delete', { id });
+      _flushPendingWrites();
     }
   };
 
@@ -434,5 +512,5 @@ const Storage = (() => {
     }
   };
 
-  return { generateId, People, Projects, Reports, Notes, Plans };
+  return { generateId, People, Projects, Reports, Notes, Plans, retryFailedWrites, syncState: _syncStats };
 })();

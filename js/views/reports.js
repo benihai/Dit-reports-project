@@ -276,7 +276,7 @@ const ReportsView = (() => {
     const report = await Storage.Reports.get(id);
     App.confirm(`למחוק דוח #${report?.reportNumber}? הפעולה בלתי הפיכה.`, async () => {
       const projectId = report.projectId;
-      await Storage.Reports.delete(id);
+      await Storage.Reports.delete(id, projectId);
       App.toast('הדוח נמחק');
       await render({ projectId });
     });
