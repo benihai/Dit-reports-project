@@ -707,6 +707,53 @@ textarea { resize: vertical; min-height: 85px; }
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+/* ── NETWORK / SYNC STATUS BANNER ── */
+.net-status {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 650;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 9px 16px;
+  padding-bottom: calc(9px + env(safe-area-inset-bottom, 0px));
+  font-size: .85rem;
+  font-weight: 600;
+  color: #fff;
+  text-align: center;
+  box-shadow: 0 -2px 10px rgba(0,0,0,.15);
+  transition: transform .25s ease, opacity .25s ease;
+}
+.net-status.hidden { transform: translateY(110%); opacity: 0; pointer-events: none; }
+.net-status.offline { background: #b45309; }
+.net-status.syncing { background: var(--green-dark); }
+.net-status.synced  { background: var(--green-dark); }
+.net-status.failed  { background: #dc2626; }
+.net-status .net-icon { display: inline-flex; align-items: center; font-weight: 800; }
+.net-status .net-spinner {
+  display: inline-block;
+  width: 14px; height: 14px;
+  border: 2px solid rgba(255,255,255,.45);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin .6s linear infinite;
+}
+.net-status .net-retry {
+  margin-inline-start: 4px;
+  background: rgba(255,255,255,.2);
+  border: 1px solid rgba(255,255,255,.7);
+  color: #fff;
+  padding: 3px 12px;
+  border-radius: 14px;
+  font-size: .8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.net-status .net-retry:hover { background: rgba(255,255,255,.32); }
+
 /* ── LOADING ── */
 .spinner {
   display: inline-block;

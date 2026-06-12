@@ -13,8 +13,9 @@ const PdfExport = (() => {
   }
 
   async function _ensureLibs() {
+    // Served locally (not CDN) so PDF export works fully offline.
     if (typeof QRCode === 'undefined') {
-      await _loadScript('https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js');
+      await _loadScript('js/vendor/qrcode.js?v=5.29');
     }
   }
 

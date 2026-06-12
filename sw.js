@@ -1,15 +1,18 @@
-const CACHE = 'dit-v37';
+const CACHE = 'dit-v38';
 
 const SHELL = [
   './',
   './index.html',
   './css/style.css',
   './js/vendor/supabase.js',
+  './js/vendor/localforage.js',
+  './js/vendor/qrcode.js',
   './js/config.js',
   './js/supabase-client.js',
   './js/auth.js',
   './js/router.js',
   './js/storage.js',
+  './js/netStatus.js',
   './js/logoSearch.js',
   './js/pdfMarkup.js',
   './js/pdfExport.js',
@@ -23,6 +26,7 @@ const SHELL = [
   './js/views/noteModal.js',
   './js/views/report.js',
   './js/app.js',
+  './icons/dit-logo.png',
   './icons/icon-192.svg',
   './icons/icon-512.svg',
 ];
@@ -70,5 +74,18 @@ self.addEventListener('fetch', e => {
 
       return cached || network;
     })
+  );
+});
+
+// Background Sync: fires when connectivity returns, even if the tab was
+// backgrounded. We don't replay requests in the SW itself (the write logic +
+// Supabase client live in the page); instead we wake any open client so its
+// Storage queue flushes. If no client is open the queue still flushes on the
+// next app load, so no data is lost.
+self.addEventListener('sync', e => {
+  if (e.tag !== 'dc-sync') return;
+  e.waitUntil(
+    self.clients.matchAll({ includeUncontrolled: true, type: 'window' })
+      .then(clients => clients.forEach(c => c.postMessage({ type: 'dc:flush' })))
   );
 });

@@ -188,10 +188,7 @@ const App = (() => {
       });
     }
 
-    // Online / offline indicator
-    window.addEventListener('offline', () => toast('אין חיבור — עובד במצב לא מקוון'));
-    window.addEventListener('online',  () => toast('החיבור שוחזר ✓'));
-
+    // Network state + sync progress are shown by NetStatus (persistent banner).
 
     showLoading('טוען...');
 
