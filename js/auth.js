@@ -15,6 +15,7 @@ const Auth = (() => {
         _currentUser    = null;
         _currentProfile = null;
         _profilePromise = null;
+        _clearCachedProfiles();
       }
       if (typeof onAuthChange === 'function') onAuthChange(event, session);
     });
@@ -61,20 +62,48 @@ const Auth = (() => {
     return (!error && data) ? data : profile;
   }
 
+  // ── Offline profile cache ────────────────────────────────────────────────
+  // The session itself is persisted by Supabase (persistSession). But the role
+  // lives in the `profiles` table, which needs the network. We cache it so a
+  // previously-logged-in user reopening OFFLINE keeps their role and routes.
+  const _PROFILE_CACHE_PREFIX = 'dc:profile:';
+  function _cacheProfile(p) {
+    try { if (p && p.id) localStorage.setItem(_PROFILE_CACHE_PREFIX + p.id, JSON.stringify(p)); } catch (_) {}
+  }
+  function _readCachedProfile(userId) {
+    try { const raw = localStorage.getItem(_PROFILE_CACHE_PREFIX + userId); return raw ? JSON.parse(raw) : null; }
+    catch (_) { return null; }
+  }
+  function _clearCachedProfiles() {
+    try { Object.keys(localStorage).filter(k => k.startsWith(_PROFILE_CACHE_PREFIX)).forEach(k => localStorage.removeItem(k)); }
+    catch (_) {}
+  }
+
   async function _loadProfile() {
     if (!_currentUser) return null;
-    const { data, error } = await _supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', _currentUser.id)
-      .maybeSingle();
-    if (!error && data) {
-      _currentProfile = await _syncMissingFields(data);
-      return _currentProfile;
+    try {
+      const { data, error } = await _supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', _currentUser.id)
+        .maybeSingle();
+      if (error) throw error;
+      if (data) {
+        _currentProfile = await _syncMissingFields(data);
+        _cacheProfile(_currentProfile);   // keep a copy for offline boot
+        return _currentProfile;
+      }
+      // Reachable but no row → account not provisioned / removed. Do not recreate.
+      _currentProfile = null;
+      return null;
+    } catch (err) {
+      // Network/offline: restore the cached profile so the user stays logged in
+      // with the correct role instead of being downgraded/locked out.
+      const cached = _readCachedProfile(_currentUser.id);
+      if (cached) { _currentProfile = cached; return _currentProfile; }
+      _currentProfile = null;
+      return null;
     }
-    // No row → account not provisioned / removed by admin. Do not recreate.
-    _currentProfile = null;
-    return null;
   }
 
   async function login(email, password) {
@@ -84,6 +113,7 @@ const Auth = (() => {
   }
 
   async function logout() {
+    _clearCachedProfiles();
     const { error } = await _supabase.auth.signOut();
     if (error) throw error;
   }

@@ -31,9 +31,16 @@ const Storage = (() => {
     } catch (_) { /* unserialisable — fall through and let localforage try */ }
     localforage.setItem('dc:' + k, d).catch(() => {});
   }
+  // Persist regardless of size — for the user's OWN offline-created content
+  // (reports/notes they just entered), which must never be dropped just because
+  // it carries embedded photos. The size cap above only guards the read-through
+  // cache of large *server* data (e.g. plans).
+  function _lfSetForce(k, d) { localforage.setItem('dc:' + k, d).catch(() => {}); }
 
-  // Try memory → network (cache result) → localforage offline fallback
-  async function _query(key, fn) {
+  // Try memory → network (cache result) → localforage offline fallback.
+  // opts.fallback: value to return when OFFLINE and nothing is cached, instead
+  // of throwing — lets views render (empty) offline rather than crashing.
+  async function _query(key, fn, opts = {}) {
     const mem = _mGet(key);
     if (mem) return mem;
     try {
@@ -44,6 +51,7 @@ const Storage = (() => {
     } catch (err) {
       const lf = await _lfGet(key);
       if (lf != null) { _mSet(key, lf); return lf; }
+      if (opts.fallback !== undefined && !navigator.onLine) return opts.fallback;
       throw err;
     }
   }
@@ -255,14 +263,14 @@ const Storage = (() => {
         const { data, error } = await _supabase.from('people').select('*').order('name');
         throwIf(error);
         return (data || []).map(mapPerson);
-      });
+      }, { fallback: [] });
     },
     async get(id) {
       return _query(`person_${id}`, async () => {
         const { data, error } = await _supabase.from('people').select('*').eq('id', id).maybeSingle();
         throwIf(error);
         return mapPerson(data);
-      });
+      }, { fallback: null });
     },
     async save(person) {
       _mClear('people', `person_${person.id}`);
@@ -284,14 +292,14 @@ const Storage = (() => {
         const { data, error } = await _supabase.from('projects').select('*').eq('person_id', personId).order('created_at', { ascending: false });
         throwIf(error);
         return (data || []).map(mapProject);
-      });
+      }, { fallback: [] });
     },
     async get(id) {
       return _query(`project_${id}`, async () => {
         const { data, error } = await _supabase.from('projects').select('*').eq('id', id).maybeSingle();
         throwIf(error);
         return mapProject(data);
-      });
+      }, { fallback: null });
     },
     async save(project) {
       // Optimistic local-first (same pattern as Reports/Notes) so creating a
@@ -304,8 +312,8 @@ const Storage = (() => {
         : [project, ...cachedList];
       _mSet(listKey, updatedList);
       _mSet(itemKey, project);
-      _lfSet(listKey, updatedList);
-      _lfSet(itemKey, project);
+      _lfSetForce(listKey, updatedList);
+      _lfSetForce(itemKey, project);
       _enqueuePendingWrite('project', 'upsert', project);
       _flushPendingWrites();
       return project;
@@ -324,7 +332,7 @@ const Storage = (() => {
         const { data, error } = await _supabase.from('reports').select('*').eq('project_id', projectId).order('created_at', { ascending: false });
         throwIf(error);
         return (data || []).map(mapReport);
-      });
+      }, { fallback: [] });
     },
     // Lightweight report-count-per-project in ONE query (avoids N+1 + pulling
     // full report rows just to count). Falls back to per-project on error.
@@ -348,7 +356,7 @@ const Storage = (() => {
         const { data, error } = await _supabase.from('reports').select('*').eq('id', id).maybeSingle();
         throwIf(error);
         return mapReport(data);
-      });
+      }, { fallback: null });
     },
     async save(report) {
       // Optimistic local-first
@@ -360,8 +368,11 @@ const Storage = (() => {
         : [...cachedList, report];
       _mSet(listKey, updatedList);
       _mSet(itemKey, report);
-      _lfSet(listKey, updatedList);
-      _lfSet(itemKey, report);
+      _lfSetForce(listKey, updatedList);
+      _lfSetForce(itemKey, report);
+      // Seed an empty notes cache so opening this brand-new report offline
+      // returns [] instead of a cache-miss that the editor can't render.
+      if (_mGet(`notes_${report.id}`) == null) _mSet(`notes_${report.id}`, []);
       // Sync to Supabase in background
       _enqueuePendingWrite('report', 'upsert', report);
       _flushPendingWrites();
@@ -427,7 +438,7 @@ const Storage = (() => {
         const { data, error } = await _supabase.from('notes').select('*').eq('report_id', reportId).order('created_at', { ascending: true });
         throwIf(error);
         return (data || []).map(mapNote);
-      });
+      }, { fallback: [] });
     },
     // Lightweight note-count-per-report in ONE query — selects only report_id, so
     // it does NOT pull the heavy media payloads just to count. Falls back per-report.
@@ -447,9 +458,14 @@ const Storage = (() => {
       }
     },
     async get(id) {
-      const { data, error } = await _supabase.from('notes').select('*').eq('id', id).maybeSingle();
-      throwIf(error);
-      return mapNote(data);
+      try {
+        const { data, error } = await _supabase.from('notes').select('*').eq('id', id).maybeSingle();
+        throwIf(error);
+        return mapNote(data);
+      } catch (err) {
+        if (!navigator.onLine) return null;
+        throw err;
+      }
     },
     async save(note) {
       // Optimistic local-first: update memory + localforage immediately
@@ -459,7 +475,7 @@ const Storage = (() => {
         ? cached.map(n => n.id === note.id ? note : n)
         : [...cached, note];
       _mSet(key, updated);
-      _lfSet(key, updated);
+      _lfSetForce(key, updated);
       // Sync to Supabase in background
       _enqueuePendingWrite('note', 'upsert', note);
       _flushPendingWrites();
@@ -490,14 +506,14 @@ const Storage = (() => {
         const { data, error } = await _supabase.from('plans').select('*').eq('project_id', projectId).order('created_at', { ascending: true });
         throwIf(error);
         return (data || []).map(mapPlan);
-      });
+      }, { fallback: [] });
     },
     async get(id) {
       return _query(`plan_${id}`, async () => {
         const { data, error } = await _supabase.from('plans').select('*').eq('id', id).maybeSingle();
         throwIf(error);
         return mapPlan(data);
-      });
+      }, { fallback: null });
     },
     async save(plan) {
       _mClear(`plans_${plan.projectId}`, `plan_${plan.id}`);
@@ -512,5 +528,35 @@ const Storage = (() => {
     }
   };
 
-  return { generateId, People, Projects, Reports, Notes, Plans, retryFailedWrites, syncState: _syncStats };
+  // ── PREFETCH FOR OFFLINE ────────────────────────────────────────────────────
+  // Warm the navigation chain (people → projects → reports) into the offline
+  // cache while online, so the whole "enter app → create a new report" flow
+  // works later with no connection. Runs in the background; failures are
+  // swallowed per-branch so one bad request can't abort the rest.
+  let _prefetching = false;
+  async function prefetchForOffline() {
+    if (_prefetching || !navigator.onLine) return;
+    _prefetching = true;
+    try {
+      let people = [];
+      if (Auth.isAdmin()) {
+        people = await People.getAll();
+      } else {
+        const pid = Auth.getAssignedPersonId();
+        if (pid) { const p = await People.get(pid); if (p) people = [p]; }
+      }
+      for (const person of people) {
+        try {
+          const projects = await Projects.getForPerson(person.id);
+          for (const project of projects) {
+            try { await Reports.getForProject(project.id); } catch (_) {}
+          }
+        } catch (_) {}
+      }
+    } catch (_) {} finally {
+      _prefetching = false;
+    }
+  }
+
+  return { generateId, People, Projects, Reports, Notes, Plans, retryFailedWrites, syncState: _syncStats, prefetchForOffline };
 })();

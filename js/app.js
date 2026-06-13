@@ -266,6 +266,10 @@ const App = (() => {
     // after Auth.login() returns, which races with the hideLoading() that was
     // at the top of this function and left a permanent overlay.
     hideLoading();
+
+    // Warm the offline cache (people → projects → reports) in the background so
+    // the "enter app → create a new report" chain works later with no network.
+    if (navigator.onLine) Storage.prefetchForOffline();
   }
 
   // ── Boot ───────────────────────────────────────────────────────────────────
@@ -286,6 +290,9 @@ const App = (() => {
     }
 
     // Network state + sync progress are shown by NetStatus (persistent banner).
+
+    // Re-warm the offline cache whenever connectivity returns mid-session.
+    window.addEventListener('online', () => { if (_appStarted) Storage.prefetchForOffline(); });
 
     showLoading('טוען...');
 
