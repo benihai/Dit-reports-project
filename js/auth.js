@@ -3,11 +3,13 @@ const Auth = (() => {
   let _currentProfile = null;
 
   let _profilePromise = null;
+  let _logoutRequested = false;   // true only for an explicit user logout
 
   function init(onAuthChange) {
     _supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
         _currentUser = session.user;
+        _logoutRequested = false;
         if (!_currentProfile || _currentProfile.id !== _currentUser.id) {
           _profilePromise = _loadProfile().catch(() => null);
         }
@@ -79,6 +81,30 @@ const Auth = (() => {
     catch (_) {}
   }
 
+  // Read the session Supabase persisted in localStorage (storageKey set in
+  // supabase-client.js). Lets us boot OFFLINE even when the SDK reports "no
+  // session" because it couldn't refresh the access token without a network.
+  function _storedSession() {
+    try {
+      const raw = localStorage.getItem('dit-reports-auth');
+      if (!raw) return null;
+      const p = JSON.parse(raw);
+      const s = (p && p.user) ? p : ((p && (p.currentSession || p.session)) || null);
+      return (s && s.user) ? s : null;
+    } catch (_) { return null; }
+  }
+  // Offline re-entry: adopt the persisted user + cached profile so a previously
+  // logged-in user gets back into the app without a connection.
+  function adoptStoredUserOffline() {
+    const s = _storedSession();
+    if (!s || !s.user) return null;
+    _currentUser = s.user;
+    const cached = _readCachedProfile(_currentUser.id);
+    if (cached) _currentProfile = cached;
+    return _currentUser;
+  }
+  function wasLogoutRequested() { return _logoutRequested; }
+
   async function _loadProfile() {
     if (!_currentUser) return null;
     try {
@@ -113,6 +139,7 @@ const Auth = (() => {
   }
 
   async function logout() {
+    _logoutRequested = true;
     _clearCachedProfiles();
     const { error } = await _supabase.auth.signOut();
     if (error) throw error;
@@ -335,6 +362,8 @@ const Auth = (() => {
     getProfile,
     isAdmin,
     isLoggedIn,
+    adoptStoredUserOffline,
+    wasLogoutRequested,
     getAssignedPersonId,
     canAccessPerson,
     canAccessProject,

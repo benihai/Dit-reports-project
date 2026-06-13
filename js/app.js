@@ -236,17 +236,30 @@ const App = (() => {
   // ── Auth ───────────────────────────────────────────────────────────────────
 
   function _onAuthChange(event, session) {
-    // INITIAL_SESSION fires on page load — treat like SIGNED_IN/SIGNED_OUT
-    if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
-      if (!_appStarted) {
-        _appStarted = true;
-        _startApp();
-      }
-    } else if (event === 'SIGNED_OUT' || (event === 'INITIAL_SESSION' && !session)) {
+    // Explicit, user-initiated logout always returns to the login screen.
+    if (event === 'SIGNED_OUT' && Auth.wasLogoutRequested()) {
       _appStarted = false;
       hideLoading();
       LoginView.render();
+      return;
     }
+    // A live session (incl. the persisted one Supabase restored) → run the app.
+    if (session) {
+      if (!_appStarted) { _appStarted = true; _startApp(); }
+      return;
+    }
+    // No session from Supabase. Offline re-entry: if a session + profile were
+    // persisted from a previous online login, boot from them anyway — the SDK
+    // just can't refresh the token without a network. This also means a
+    // refresh-failure SIGNED_OUT while offline won't lock the user out.
+    if (!navigator.onLine && Auth.adoptStoredUserOffline()) {
+      if (!_appStarted) { _appStarted = true; _startApp(); }
+      return;
+    }
+    // Genuinely signed out (online logout / no recoverable session) → login.
+    _appStarted = false;
+    hideLoading();
+    LoginView.render();
   }
 
   async function _startApp() {
