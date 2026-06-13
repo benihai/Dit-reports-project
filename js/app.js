@@ -233,6 +233,60 @@ const App = (() => {
       }
       _safeRender(() => AdminView.render());
     });
+
+    // Diagnostics: shows the captured error log (route + message + UA) so an
+    // intermittent crash can be reported by screenshotting #/diag.
+    Router.register('/diag', () => {
+      ReportView.cleanup();
+      _safeRender(() => _renderDiag());
+    });
+  }
+
+  function _renderDiag() {
+    setHeader('אבחון שגיאות', true, '');
+    const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    let log = [];
+    try { log = JSON.parse(localStorage.getItem('dc:errlog') || '[]'); } catch (_) {}
+
+    const rows = log.length === 0
+      ? `<tr><td colspan="4" style="padding:16px;text-align:center;color:#888;">לא נרשמו שגיאות 🎉</td></tr>`
+      : log.slice().reverse().map(e => `
+          <tr style="border-bottom:1px solid #eee;">
+            <td style="padding:6px 8px;white-space:nowrap;font-size:.72rem;color:#666;">${esc((e.t||'').replace('T',' ').slice(0,19))}</td>
+            <td style="padding:6px 8px;font-family:monospace;font-size:.72rem;color:#1d4ed8;">${esc(e.hash||'')}</td>
+            <td style="padding:6px 8px;font-size:.78rem;color:#991b1b;">${esc(e.msg||'')}${e.src ? `<br><small style="color:#999;">${esc(e.src)}:${esc(e.line)}</small>` : ''}</td>
+            <td style="padding:6px 8px;font-size:.7rem;color:#999;">${esc(e.kind||'')}${e.online === false ? ' · offline' : ''}</td>
+          </tr>`).join('');
+
+    const vc = document.getElementById('view-container');
+    vc.innerHTML = `
+      <div style="padding:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+          <div style="font-weight:700;">יומן שגיאות (${log.length})</div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-outline btn-sm" onclick="App.clearDiag()">נקה יומן</button>
+            <button class="btn btn-outline btn-sm" onclick="location.reload()">רענן</button>
+          </div>
+        </div>
+        <p style="font-size:.78rem;color:#666;margin-bottom:10px;">אם קיבלת שגיאה — צלם את המסך הזה ושלח לתמיכה. העמודה "מסלול" מראה היכן זה קרה.</p>
+        <div style="overflow-x:auto;border:1px solid #eee;border-radius:8px;">
+          <table style="width:100%;border-collapse:collapse;direction:rtl;">
+            <thead><tr style="background:#f7f7f7;text-align:right;">
+              <th style="padding:8px;font-size:.72rem;">זמן</th>
+              <th style="padding:8px;font-size:.72rem;">מסלול</th>
+              <th style="padding:8px;font-size:.72rem;">שגיאה</th>
+              <th style="padding:8px;font-size:.72rem;">סוג</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+        <p style="font-size:.68rem;color:#aaa;margin-top:10px;word-break:break-all;">דפדפן: ${esc(navigator.userAgent)}</p>
+      </div>`;
+  }
+
+  function clearDiag() {
+    try { localStorage.removeItem('dc:errlog'); } catch (_) {}
+    _renderDiag();
   }
 
   // ── Auth ───────────────────────────────────────────────────────────────────
@@ -323,7 +377,7 @@ const App = (() => {
     }, 8000);
   }
 
-  return { setHeader, goBack, toast, confirm, showLoading, hideLoading, showAccessDenied, init };
+  return { setHeader, goBack, toast, confirm, showLoading, hideLoading, showAccessDenied, init, clearDiag };
 })();
 
 document.addEventListener('DOMContentLoaded', App.init);
