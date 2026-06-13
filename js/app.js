@@ -236,17 +236,30 @@ const App = (() => {
   // ── Auth ───────────────────────────────────────────────────────────────────
 
   function _onAuthChange(event, session) {
-    // INITIAL_SESSION fires on page load — treat like SIGNED_IN/SIGNED_OUT
-    if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
-      if (!_appStarted) {
-        _appStarted = true;
-        _startApp();
-      }
-    } else if (event === 'SIGNED_OUT' || (event === 'INITIAL_SESSION' && !session)) {
+    // Explicit, user-initiated logout always returns to the login screen.
+    if (event === 'SIGNED_OUT' && Auth.wasLogoutRequested()) {
       _appStarted = false;
       hideLoading();
       LoginView.render();
+      return;
     }
+    // A live session (incl. the persisted one Supabase restored) → run the app.
+    if (session) {
+      if (!_appStarted) { _appStarted = true; _startApp(); }
+      return;
+    }
+    // No session from Supabase. Offline re-entry: if a session + profile were
+    // persisted from a previous online login, boot from them anyway — the SDK
+    // just can't refresh the token without a network. This also means a
+    // refresh-failure SIGNED_OUT while offline won't lock the user out.
+    if (!navigator.onLine && Auth.adoptStoredUserOffline()) {
+      if (!_appStarted) { _appStarted = true; _startApp(); }
+      return;
+    }
+    // Genuinely signed out (online logout / no recoverable session) → login.
+    _appStarted = false;
+    hideLoading();
+    LoginView.render();
   }
 
   async function _startApp() {
@@ -266,6 +279,10 @@ const App = (() => {
     // after Auth.login() returns, which races with the hideLoading() that was
     // at the top of this function and left a permanent overlay.
     hideLoading();
+
+    // Warm the offline cache (people → projects → reports) in the background so
+    // the "enter app → create a new report" chain works later with no network.
+    if (navigator.onLine) Storage.prefetchForOffline();
   }
 
   // ── Boot ───────────────────────────────────────────────────────────────────
@@ -285,10 +302,10 @@ const App = (() => {
       });
     }
 
-    // Online / offline indicator
-    window.addEventListener('offline', () => toast('אין חיבור — עובד במצב לא מקוון'));
-    window.addEventListener('online',  () => toast('החיבור שוחזר ✓'));
+    // Network state + sync progress are shown by NetStatus (persistent banner).
 
+    // Re-warm the offline cache whenever connectivity returns mid-session.
+    window.addEventListener('online', () => { if (_appStarted) Storage.prefetchForOffline(); });
 
     showLoading('טוען...');
 

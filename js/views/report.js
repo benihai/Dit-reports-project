@@ -360,7 +360,7 @@ const ReportView = (() => {
 
   async function deleteNote(noteId) {
     App.confirm('למחוק ממצא זה?', async () => {
-      await Storage.Notes.delete(noteId);
+      await Storage.Notes.delete(noteId, _reportId);
       App.toast('ממצא נמחק');
       await refreshNotes();
     });
