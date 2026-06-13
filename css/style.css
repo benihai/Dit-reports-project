@@ -595,6 +595,76 @@ textarea { resize: vertical; min-height: 85px; }
   margin-bottom: 8px;
 }
 
+/* ── FINDING TAGS & FILTER (תיוג אוטומטי + סינון ממצאים) ── */
+.tag-badge {
+  display: inline-block;
+  font-size: .68rem;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 999px;
+  letter-spacing: .02em;
+  line-height: 1.5;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.tag-preview {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: .8rem;
+  color: var(--text-muted);
+  margin-top: 8px;
+}
+
+.notes-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding: 10px;
+  background: var(--green-bg);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+}
+.notes-filter-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.notes-filter-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: .78rem;
+  font-weight: 700;
+  padding: 4px 11px;
+  border-radius: 999px;
+  border: 1.5px solid var(--border);
+  transition: filter .15s, transform .1s, box-shadow .15s;
+}
+.filter-chip:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
+.filter-chip:active { transform: translateY(0); }
+.filter-chip-count { font-size: .7rem; opacity: .75; font-weight: 600; }
+
+/* צבעי תגים (badge על כרטיס + צ'יפ סינון לא-פעיל) */
+.tag-binui,        .filter-chip.tag-binui         { background: #e0edff; color: #1e4fa3; border-color: #bcd6ff; }
+.tag-multimedia,   .filter-chip.tag-multimedia    { background: #f1e3ff; color: #6b2fb3; border-color: #ddc4f5; }
+.tag-communication,.filter-chip.tag-communication { background: #d9f5f1; color: #0f766e; border-color: #aee6df; }
+.tag-security,     .filter-chip.tag-security      { background: #ffe1e1; color: #b91c1c; border-color: #f5bcbc; }
+.tag-supervision,  .filter-chip.tag-supervision   { background: var(--green-light); color: var(--green-dark); border-color: var(--green); }
+.tag-other,        .filter-chip.tag-other         { background: #eef0f2; color: #475569; border-color: #dde1e6; }
+
+/* צ'יפ סינון פעיל — צבע מלא */
+.filter-chip.active { color: #fff; border-color: transparent; }
+.filter-chip.active.tag-binui         { background: #1e4fa3; }
+.filter-chip.active.tag-multimedia    { background: #6b2fb3; }
+.filter-chip.active.tag-communication { background: #0f766e; }
+.filter-chip.active.tag-security      { background: #b91c1c; }
+.filter-chip.active.tag-supervision   { background: var(--green-dark); }
+.filter-chip.active.tag-other         { background: #475569; }
+
 /* ── PLANS (PDF floor plans) ── */
 .plan-card {
   background: white;

@@ -11,6 +11,38 @@ const NoteModal = (() => {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
+  // ── אחריות → תיוג אוטומטי ─────────────────────────────────────────────────────
+  // אפשרויות שדה 'אחריות' (Dropdown). 'התאמה אישית' פותח שדה טקסט חופשי.
+  const CUSTOM_OPTION = 'התאמה אישית';
+  const RESPONSIBILITY_OPTIONS = [
+    'פיקוח', 'קבלן ראשי', 'קבלן חשמל', 'קבלן מיזוג',
+    'קבלן תקשורת', 'קבלן ביטחון', 'קבלן מולטימדיה', CUSTOM_OPTION,
+  ];
+  // מיפוי גורם אחראי → תג
+  const TAG_MAP = {
+    'קבלן ראשי':     'בינוי',
+    'קבלן חשמל':     'בינוי',
+    'קבלן מיזוג':    'בינוי',
+    'קבלן מולטימדיה':'מולטימדיה',
+    'קבלן תקשורת':   'תקשורת',
+    'קבלן ביטחון':   'ביטחון',
+    'פיקוח':         'פיקוח',
+  };
+  const CUSTOM_TAG = 'אחר';
+  // כל התגים האפשריים (לסדר אחיד ברכיב הסינון)
+  const ALL_TAGS = ['בינוי', 'תקשורת', 'מולטימדיה', 'ביטחון', 'פיקוח', CUSTOM_TAG];
+  // תג → slug באנגלית לצורך מחלקות CSS (צבעים)
+  const TAG_SLUG = {
+    'בינוי':'binui', 'מולטימדיה':'multimedia', 'תקשורת':'communication',
+    'ביטחון':'security', 'פיקוח':'supervision', 'אחר':'other',
+  };
+  function tagSlug(t) { return TAG_SLUG[t] || 'other'; }
+  // קביעת התג לפי הגורם האחראי שנבחר
+  function tagForResponsibility(type) {
+    if (type === CUSTOM_OPTION) return CUSTOM_TAG;
+    return TAG_MAP[type] || '';
+  }
+
   const _MAX_VIDEO_BYTES = 15 * 1024 * 1024;  // 15 MB — videos are stored inline as base64
 
   // ── MEDIA THUMBNAILS ─────────────────────────────────────────────────────────
@@ -70,6 +102,75 @@ const NoteModal = (() => {
         `).join('')}
       </div>
     `;
+  }
+
+  // ── שדה אחריות (Dropdown + טקסט חופשי + תצוגת תיוג) ──────────────────────────
+  function responsibilityFieldHtml(note) {
+    const savedType = note?.responsibilityType || '';
+    const savedResp = note?.responsible || '';
+
+    // שחזור הבחירה בעת עריכה (כולל ממצאים ישנים ללא responsibilityType)
+    let initType = '', initCustom = '';
+    if (savedType) {
+      initType   = savedType;
+      initCustom = (savedType === CUSTOM_OPTION) ? savedResp : '';
+    } else if (savedResp) {
+      if (RESPONSIBILITY_OPTIONS.includes(savedResp)) { initType = savedResp; }
+      else { initType = CUSTOM_OPTION; initCustom = savedResp; }
+    }
+
+    const options = [`<option value="" ${initType ? '' : 'selected'}>— בחר גורם אחראי —</option>`]
+      .concat(RESPONSIBILITY_OPTIONS.map(o =>
+        `<option value="${escHtml(o)}" ${o === initType ? 'selected' : ''}>${escHtml(o)}</option>`))
+      .join('');
+
+    const customHidden = (initType === CUSTOM_OPTION) ? '' : 'hidden';
+    const tag = tagForResponsibility(initType);
+    const previewHidden = initType ? '' : 'hidden';
+
+    return `
+      <div class="form-group">
+        <label>אחריות</label>
+        <select id="note-responsibility-type" onchange="NoteModal.onResponsibilityChange()">
+          ${options}
+        </select>
+      </div>
+      <div class="form-group ${customHidden}" id="note-responsible-custom-group">
+        <label>פרט את הגורם האחראי <span class="required">*</span></label>
+        <input type="text" id="note-responsible-custom" placeholder="הקלד גורם אחראי..."
+               value="${escHtml(initCustom)}">
+      </div>
+      <div class="tag-preview ${previewHidden}" id="note-tag-preview">
+        תיוג אוטומטי:
+        <span class="tag-badge tag-${tagSlug(tag)}" id="note-tag-badge">${escHtml(tag)}</span>
+      </div>
+    `;
+  }
+
+  // נקרא בכל שינוי ב-Dropdown: פתיחת/סגירת טקסט חופשי + עדכון תצוגת התג
+  function onResponsibilityChange() {
+    const type        = document.getElementById('note-responsibility-type')?.value || '';
+    const customGroup = document.getElementById('note-responsible-custom-group');
+    const customInput = document.getElementById('note-responsible-custom');
+    if (customGroup) {
+      const isCustom = (type === CUSTOM_OPTION);
+      customGroup.classList.toggle('hidden', !isCustom);
+      if (isCustom) setTimeout(() => customInput?.focus(), 50);
+    }
+    updateTagPreview();
+  }
+
+  // עדכון תצוגת התג האוטומטי בזמן אמת
+  function updateTagPreview() {
+    const preview = document.getElementById('note-tag-preview');
+    const badge   = document.getElementById('note-tag-badge');
+    const type    = document.getElementById('note-responsibility-type')?.value || '';
+    if (!preview || !badge) return;
+    if (!type) { preview.classList.add('hidden'); return; }
+    const tag = tagForResponsibility(type);
+    badge.textContent = tag;
+    badge.className   = `tag-badge tag-${tagSlug(tag)}`;
+    preview.classList.remove('hidden');
   }
 
   // ── OPEN ─────────────────────────────────────────────────────────────────────
@@ -142,10 +243,7 @@ const NoteModal = (() => {
               <label>תיאור הממצא <span class="required">*</span></label>
               <textarea id="note-description" placeholder="תאר את הממצא בפירוט..." rows="4">${escHtml(note?.description || '')}</textarea>
             </div>
-            <div class="form-group">
-              <label>אחראי לטיפול</label>
-              <input type="text" id="note-responsible" placeholder="קבלן גבס / חשמלאי..." value="${escHtml(note?.responsible || '')}">
-            </div>
+            ${responsibilityFieldHtml(note)}
           </div>
 
           <div class="form-section" style="margin-bottom:12px;">
@@ -290,6 +388,17 @@ const NoteModal = (() => {
     const description = document.getElementById('note-description').value.trim();
     if (!description) { App.toast('נא לתאר את הממצא'); return; }
 
+    // אחריות + תיוג אוטומטי
+    const respType = document.getElementById('note-responsibility-type')?.value || '';
+    let responsible = '';
+    if (respType === CUSTOM_OPTION) {
+      responsible = document.getElementById('note-responsible-custom')?.value.trim() || '';
+      if (!responsible) { App.toast('נא לפרט את הגורם האחראי'); return; }
+    } else if (respType) {
+      responsible = respType;
+    }
+    const tag = tagForResponsibility(respType);
+
     App.showLoading('שומר...');
     try {
       const allNotes = await Storage.Notes.getForReport(_reportId);
@@ -304,7 +413,9 @@ const NoteModal = (() => {
         floor:       document.getElementById('note-floor').value.trim(),
         area:        document.getElementById('note-area').value.trim(),
         description,
-        responsible: document.getElementById('note-responsible').value.trim(),
+        responsible,
+        responsibilityType: respType,
+        tag,
         mediaItems:  _mediaItems,
         planMarkups: _planMarkups,
         createdAt:   _noteId ? (allNotes.find(n => n.id === _noteId)?.createdAt ?? Date.now()) : Date.now(),
@@ -325,5 +436,10 @@ const NoteModal = (() => {
     document.getElementById('note-modal-overlay')?.classList.add('hidden');
   }
 
-  return { open, handleMedia, removeMedia, annotateMedia, openPlanMarkup, removePlanMarkup, submit, close };
+  return {
+    open, handleMedia, removeMedia, annotateMedia, openPlanMarkup, removePlanMarkup, submit, close,
+    onResponsibilityChange, updateTagPreview,
+    // נחשפים ל-ReportView לצורך סינון ותצוגת תגים
+    ALL_TAGS, tagSlug, tagForResponsibility,
+  };
 })();

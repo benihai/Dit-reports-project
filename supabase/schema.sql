@@ -65,6 +65,8 @@ create table if not exists public.notes (
   area         text,
   description  text,
   responsible  text,
+  responsibility_type text,
+  tag          text,
   urgency      text,
   status       text,
   media_items  jsonb not null default '[]',

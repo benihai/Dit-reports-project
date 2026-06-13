@@ -2,6 +2,8 @@ const ReportView = (() => {
   let _reportId  = null;
   let _projectId = null;
   let _fab       = null;
+  let _allNotes  = [];            // כל הממצאים בדוח (מקור הסינון)
+  let _activeTags = new Set();    // התגים הפעילים בסינון
 
   function escHtml(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -29,6 +31,9 @@ const ReportView = (() => {
       Storage.Notes.getForReport(reportId),
     ]);
     const person = project?.personId ? await Storage.People.get(project.personId) : null;
+
+    _allNotes   = notes;
+    _activeTags = new Set();
 
     App.setHeader(`דוח #${report.reportNumber}`, true, `
       <button class="btn btn-outline btn-sm" onclick="ReportView.exportPdf()">
@@ -181,10 +186,80 @@ const ReportView = (() => {
         </div>
         <span class="badge badge-green" id="notes-count-badge">${notes.length}</span>
       </div>
-      <div class="notes-container" id="notes-list">
-        ${notes.length === 0 ? emptyNotesHtml() : notes.map((n, i) => noteCardHtml(n, i + 1)).join('')}
-      </div>
+      <div id="notes-area">${notesAreaHtml(notes)}</div>
     `;
+  }
+
+  // ── סינון: סרגל תגים + רשימה ──────────────────────────────────────────────────
+  function notesAreaHtml(notes) {
+    return filterBarHtml(notes)
+      + `<div class="notes-container" id="notes-list">${listInnerHtml(_filtered(notes))}</div>`;
+  }
+
+  function listInnerHtml(notes) {
+    if (_allNotes.length === 0) return emptyNotesHtml();
+    if (notes.length === 0) {
+      return `<div class="empty-state" style="padding:24px 16px;">
+        <h3>אין ממצאים בסינון הנוכחי</h3>
+        <p>בחר תגים אחרים או נקה את הסינון</p>
+      </div>`;
+    }
+    return notes.map((n, i) => noteCardHtml(n, i + 1)).join('');
+  }
+
+  // הצגת רק ממצאים שתואמים את התגים הפעילים (ריק = הכל)
+  function _filtered(notes) {
+    if (_activeTags.size === 0) return notes;
+    return notes.filter(n => _activeTags.has(n.tag));
+  }
+
+  function filterBarHtml(notes) {
+    // הצג צ'יפ רק לתגים שקיימים בפועל בדוח, לפי סדר קבוע
+    const present = NoteModal.ALL_TAGS.filter(t => notes.some(n => n.tag === t));
+    if (present.length === 0) return '';
+
+    const chips = present.map(t => {
+      const count  = notes.filter(n => n.tag === t).length;
+      const active = _activeTags.has(t);
+      return `<button type="button" class="filter-chip tag-${NoteModal.tagSlug(t)} ${active ? 'active' : ''}"
+                onclick="ReportView.toggleTag('${t}')">
+                ${escHtml(t)} <span class="filter-chip-count">${count}</span>
+              </button>`;
+    }).join('');
+
+    const clearHidden = _activeTags.size ? '' : 'hidden';
+    return `
+      <div class="notes-filter-bar" id="notes-filter-bar">
+        <div class="notes-filter-chips">${chips}</div>
+        <div class="notes-filter-actions">
+          <button type="button" class="btn btn-ghost btn-sm ${clearHidden}" id="filter-clear-btn"
+                  onclick="ReportView.clearTags()">נקה סינון</button>
+          <button type="button" class="btn btn-outline btn-sm" onclick="ReportView.exportFiltered()">
+            📄 הפק דוח מסונן
+          </button>
+        </div>
+      </div>`;
+  }
+
+  function rerenderNotesArea() {
+    const area = document.getElementById('notes-area');
+    if (area) area.innerHTML = notesAreaHtml(_allNotes);
+    const badge = document.getElementById('notes-count-badge');
+    if (badge) {
+      const shown = _filtered(_allNotes).length;
+      badge.textContent = _activeTags.size ? `${shown}/${_allNotes.length}` : _allNotes.length;
+    }
+  }
+
+  function toggleTag(tag) {
+    if (_activeTags.has(tag)) _activeTags.delete(tag);
+    else _activeTags.add(tag);
+    rerenderNotesArea();
+  }
+
+  function clearTags() {
+    _activeTags.clear();
+    rerenderNotesArea();
   }
 
   function emptyNotesHtml() {
@@ -236,7 +311,10 @@ const ReportView = (() => {
     return `
       <div class="note-card" onclick="ReportView.editNote('${note.id}')">
         <div class="note-card-header">
-          <span class="note-number">ממצא ${noteNum || note.noteNumber || '?'}</span>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <span class="note-number">ממצא ${noteNum || note.noteNumber || '?'}</span>
+            ${note.tag ? `<span class="tag-badge tag-${NoteModal.tagSlug(note.tag)}">${escHtml(note.tag)}</span>` : ''}
+          </div>
           ${_readOnly ? '' : `
           <div style="display:flex;gap:4px;" onclick="event.stopPropagation()">
             <button class="btn-icon-sm" title="ערוך" onclick="ReportView.editNote('${note.id}')">
@@ -268,11 +346,12 @@ const ReportView = (() => {
   }
 
   async function refreshNotes() {
-    const notes = await Storage.Notes.getForReport(_reportId);
-    const list  = document.getElementById('notes-list');
-    const badge = document.getElementById('notes-count-badge');
-    if (list)  list.innerHTML    = notes.length === 0 ? emptyNotesHtml() : notes.map((n, i) => noteCardHtml(n, i + 1)).join('');
-    if (badge) badge.textContent = notes.length;
+    _allNotes = await Storage.Notes.getForReport(_reportId);
+    // הסר מהסינון תגים שכבר לא קיימים באף ממצא
+    _activeTags.forEach(t => {
+      if (!_allNotes.some(n => n.tag === t)) _activeTags.delete(t);
+    });
+    rerenderNotesArea();
   }
 
   function editNote(noteId) {
@@ -318,6 +397,16 @@ const ReportView = (() => {
     await PdfExport.preview(report, notes, project);
   }
 
+  // הפקת דוח רק עבור הממצאים המוצגים כעת לאחר סינון
+  async function exportFiltered() {
+    const notes = _filtered(_allNotes);
+    if (!notes.length) { App.toast('אין ממצאים להצגה בסינון הנוכחי'); return; }
+    const report  = await Storage.Reports.get(_reportId);
+    const project = await Storage.Projects.get(report.projectId);
+    const tagsLabel = _activeTags.size ? [...NoteModal.ALL_TAGS].filter(t => _activeTags.has(t)).join(', ') : '';
+    await PdfExport.preview(report, notes, project, { filterTags: tagsLabel });
+  }
+
   // ── EMAIL SHARE ──────────────────────────────────────────────────────────────
   async function shareEmail() {
     const report  = await Storage.Reports.get(_reportId);
@@ -349,5 +438,6 @@ const ReportView = (() => {
     toggleEditHeader, cancelEditHeader, saveHeader,
     editNote, deleteNote,
     openLightbox, exportPdf, shareEmail,
+    toggleTag, clearTags, exportFiltered,
   };
 })();

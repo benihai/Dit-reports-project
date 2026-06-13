@@ -52,6 +52,22 @@ const PdfExport = (() => {
       style="display:inline-block;vertical-align:middle;flex-shrink:0;">${d[name]||''}</svg>`;
   }
 
+  // ── TAG CHIP (תיוג ממצא) ───────────────────────────────────────────────────────
+  function tagChipHtml(tag) {
+    if (!tag) return '';
+    const colors = {
+      'בינוי':     ['#e0edff', '#1e4fa3'],
+      'מולטימדיה': ['#f1e3ff', '#6b2fb3'],
+      'תקשורת':    ['#d9f5f1', '#0f766e'],
+      'ביטחון':    ['#ffe1e1', '#b91c1c'],
+      'פיקוח':     ['#eaf5d4', '#4a8a20'],
+      'אחר':       ['#eef0f2', '#475569'],
+    }[tag] || ['#eef0f2', '#475569'];
+    return `<span style="display:inline-block;font-family:'Heebo',Arial,sans-serif;
+              font-size:10px;font-weight:700;padding:2px 9px;border-radius:999px;
+              background:${colors[0]};color:${colors[1]};white-space:nowrap;flex-shrink:0;">${esc(tag)}</span>`;
+  }
+
   // ── QR CODE ──────────────────────────────────────────────────────────────────
   function makeQrDataUrl(text) {
     return new Promise(resolve => {
@@ -259,6 +275,7 @@ const PdfExport = (() => {
                          border-radius:999px;white-space:nowrap;flex-shrink:0;">ממצא ${num}</span>
             ${note.floor ? `<span style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:#3A3A3A;white-space:nowrap;">📍 ${esc(note.floor)}</span>` : ''}
             ${note.area  ? `<span style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:#3A3A3A;white-space:nowrap;">🚪 ${esc(note.area)}</span>` : ''}
+            ${tagChipHtml(note.tag)}
           </div>
           <span style="font-family:monospace;font-size:10px;color:#AEAEAD;white-space:nowrap;flex-shrink:0;">${ref}</span>
         </div>
@@ -414,6 +431,17 @@ const PdfExport = (() => {
     const ditLogoSrc = await _getDitLogoDataUrl();
     const clientName = project?.clientName || project?.name || '';
 
+    // באנר סינון — מוצג רק כשמפיקים דוח מסונן
+    const filterBanner = opts.filterTags
+      ? `<div style="max-width:794px;margin:8px auto 0;padding:8px 28px;">
+           <div style="background:#F6FAEC;border:1px solid #BCDE85;border-radius:6px;
+                       padding:8px 12px;font-family:'Heebo',Arial,sans-serif;font-size:12px;
+                       color:#4a8a20;font-weight:700;">
+             דוח מסונן · מציג ממצאים בתגיות: ${esc(opts.filterTags)}
+           </div>
+         </div>`
+      : '';
+
     // findings section
     let findingsHtml;
     if (notes.length > 0) {
@@ -426,7 +454,7 @@ const PdfExport = (() => {
           <h2 style="margin:0 0 16px;font-family:'Heebo',Arial,sans-serif;
                      font-weight:800;font-size:14px;letter-spacing:.12em;
                      text-transform:uppercase;color:#6FA82B;">
-            ממצאים והערות (${notes.length})
+            ${opts.filterTags ? 'ממצאים מסוננים' : 'ממצאים והערות'} (${notes.length})
           </h2>
           ${cards.join('')}
         </section>`;
@@ -442,6 +470,7 @@ const PdfExport = (() => {
                   background:#fff;color:#1A1A1A;line-height:1.5;">
         ${reportHeaderHtml(clientLogoSrc, clientName, report, ditLogoSrc)}
         ${metadataBlockHtml(report, project)}
+        ${filterBanner}
         ${findingsHtml}
         ${summaryBlockHtml(report)}
         ${docFooterHtml(report, clientName)}
@@ -451,16 +480,17 @@ const PdfExport = (() => {
   // ─────────────────────────────────────────────────────────────────────────────
   // PREVIEW OVERLAY
   // ─────────────────────────────────────────────────────────────────────────────
-  let _prevReport = null, _prevNotes = null, _prevProject = null, _prevHtml = null;
+  let _prevReport = null, _prevNotes = null, _prevProject = null, _prevHtml = null, _prevOpts = {};
 
-  async function preview(report, notes, project) {
+  async function preview(report, notes, project, opts = {}) {
     App.showLoading('מכין תצוגה מקדימה...');
     try {
       await _ensureLibs();
       _prevReport  = report;
       _prevNotes   = notes;
       _prevProject = project;
-      _prevHtml    = await buildHtml(report, notes, project);
+      _prevOpts    = opts;
+      _prevHtml    = await buildHtml(report, notes, project, opts);
       _showPreviewOverlay(report, _prevHtml);
     } catch (err) {
       App.toast('שגיאה בטעינת תצוגה מקדימה');
@@ -514,7 +544,7 @@ const PdfExport = (() => {
   async function downloadFromPreview() {
     if (!_prevReport) return;
     try {
-      await generate(_prevReport, _prevNotes, _prevProject);
+      await generate(_prevReport, _prevNotes, _prevProject, _prevOpts);
       document.getElementById('pdf-preview-overlay')?.remove();
     } catch (err) {
       App.toast('שגיאה בייצוא PDF');
@@ -552,9 +582,9 @@ const PdfExport = (() => {
     figure { margin: 0; }
   `;
 
-  async function generate(report, notes, project) {
+  async function generate(report, notes, project, opts = {}) {
     await _ensureLibs();
-    const html = await buildHtml(report, notes, project);
+    const html = await buildHtml(report, notes, project, opts);
     const _desc = (report.description || '').replace(/[\\/:*?"<>|]/g,'').replace(/\s+/g,' ').trim();
     const _proj = (project?.name || 'DIT').replace(/[\\/:*?"<>|]/g,'').replace(/\s+/g,' ').trim();
     const fname = `${_desc || ('דוח ' + report.reportNumber)} - ${_proj}`;
