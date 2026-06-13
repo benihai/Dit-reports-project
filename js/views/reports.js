@@ -154,6 +154,7 @@ const ReportsView = (() => {
     return new Promise((resolve, reject) => {
       const s = document.createElement('script');
       s.src = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js';
+      s.crossOrigin = 'anonymous';   // so runtime errors aren't masked as "Script error."
       s.onload = resolve;
       s.onerror = () => reject(new Error('נכשל בטעינת ספריית PDF'));
       document.head.appendChild(s);

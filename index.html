@@ -10,22 +10,49 @@
   <meta name="apple-mobile-web-app-title" content="DIT Report">
   <title>DIT Report</title>
   <link rel="manifest" href="manifest.json">
-  <link rel="apple-touch-icon" href="icons/icon-180.png?v=5.43">
-  <link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192.png?v=5.43">
+  <link rel="apple-touch-icon" href="icons/icon-180.png?v=5.44">
+  <link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192.png?v=5.44">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
 
-  <!-- Global JS error display — shows any crash in the page instead of silent blank screen -->
+  <!-- Global JS error surface — non-destructive banner, never wipes a working screen -->
   <script>
     window.onerror = function(msg, src, line, col, err) {
-      var vc = document.getElementById('view-container');
-      if (vc) vc.innerHTML =
-        '<div style="padding:24px;color:#dc2626;font-family:monospace;font-size:13px;background:#fef2f2;margin:16px;border-radius:8px;border:1px solid #fca5a5;">' +
-        '<b>שגיאת JavaScript:</b><br>' + msg + '<br><small>' + src + ':' + line + '</small></div>';
+      // Opaque cross-origin "Script error." (no source/line, no Error object)
+      // carries no actionable detail — it comes from a third-party CDN script
+      // loaded without crossorigin. Log it but DO NOT blank the screen.
+      if ((msg === 'Script error.' || !src) && !err) {
+        console.warn('Ignored opaque cross-origin error:', msg, src, line);
+        return false;
+      }
+      // Real error: show a dismissible banner instead of replacing the view,
+      // so the user's current screen and state are preserved.
+      try {
+        console.error('Global error:', msg, src + ':' + line, err);
+        var box = document.getElementById('global-error-banner');
+        if (!box) {
+          box = document.createElement('div');
+          box.id = 'global-error-banner';
+          box.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;z-index:99999;' +
+            'background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:10px 38px 10px 14px;' +
+            'color:#991b1b;font-family:sans-serif;font-size:13px;direction:rtl;text-align:right;' +
+            'box-shadow:0 4px 14px rgba(0,0,0,.18);max-width:560px;margin:0 auto;';
+          document.body.appendChild(box);
+        }
+        box.innerHTML = '<button onclick="this.parentNode.remove()" style="position:absolute;' +
+          'inset-inline-start:8px;top:8px;background:none;border:none;color:#991b1b;font-size:16px;' +
+          'cursor:pointer;line-height:1;">✕</button>' +
+          '<b>שגיאה זמנית:</b> ' + String(msg) +
+          ' <small style="opacity:.65;">(' + (src || '') + ':' + (line || 0) + ')</small>';
+      } catch (_) {}
       return false;
     };
+    // Surface unhandled promise rejections to the console (do not blank the UI).
+    window.addEventListener('unhandledrejection', function(e) {
+      console.error('Unhandled promise rejection:', e && e.reason);
+    });
   </script>
 </head>
 <body>
@@ -77,28 +104,28 @@
   <script src="js/vendor/localforage.js?v=5.40"></script>
 
   <!-- CONFIG & SUPABASE CLIENT (load first) -->
-  <script src="js/config.js?v=5.43"></script>
-  <script src="js/supabase-client.js?v=5.43"></script>
-  <script src="js/auth.js?v=5.43"></script>
+  <script src="js/config.js?v=5.44"></script>
+  <script src="js/supabase-client.js?v=5.44"></script>
+  <script src="js/auth.js?v=5.44"></script>
 
   <!-- APP SCRIPTS (order matters) -->
-  <script src="js/router.js?v=5.43"></script>
-  <script src="js/storage.js?v=5.43"></script>
-  <script src="js/netStatus.js?v=5.43"></script>
-  <script src="js/logoSearch.js?v=5.43"></script>
-  <script src="js/pdfMarkup.js?v=5.43"></script>
-  <script src="js/pdfExport.js?v=5.43"></script>
-  <script src="js/views/login.js?v=5.43"></script>
-  <script src="js/views/viewerReports.js?v=5.43"></script>
-  <script src="js/views/admin.js?v=5.43"></script>
-  <script src="js/views/userHome.js?v=5.43"></script>
-  <script src="js/views/people.js?v=5.43"></script>
-  <script src="js/views/projects.js?v=5.43"></script>
-  <script src="js/views/newProject.js?v=5.43"></script>
-  <script src="js/views/reports.js?v=5.43"></script>
-  <script src="js/views/noteModal.js?v=5.43"></script>
-  <script src="js/views/report.js?v=5.43"></script>
-  <script src="js/emailShare.js?v=5.43"></script>
-  <script src="js/app.js?v=5.43"></script>
+  <script src="js/router.js?v=5.44"></script>
+  <script src="js/storage.js?v=5.44"></script>
+  <script src="js/netStatus.js?v=5.44"></script>
+  <script src="js/logoSearch.js?v=5.44"></script>
+  <script src="js/pdfMarkup.js?v=5.44"></script>
+  <script src="js/pdfExport.js?v=5.44"></script>
+  <script src="js/views/login.js?v=5.44"></script>
+  <script src="js/views/viewerReports.js?v=5.44"></script>
+  <script src="js/views/admin.js?v=5.44"></script>
+  <script src="js/views/userHome.js?v=5.44"></script>
+  <script src="js/views/people.js?v=5.44"></script>
+  <script src="js/views/projects.js?v=5.44"></script>
+  <script src="js/views/newProject.js?v=5.44"></script>
+  <script src="js/views/reports.js?v=5.44"></script>
+  <script src="js/views/noteModal.js?v=5.44"></script>
+  <script src="js/views/report.js?v=5.44"></script>
+  <script src="js/emailShare.js?v=5.44"></script>
+  <script src="js/app.js?v=5.44"></script>
 </body>
 </html>

@@ -12,7 +12,8 @@ const EmailShare = (() => {
     if (_loaded[src]) return _loaded[src];
     _loaded[src] = new Promise((res, rej) => {
       const s = document.createElement('script');
-      s.src = src; s.onload = res; s.onerror = rej;
+      s.src = src; s.crossOrigin = 'anonymous';   // surface real errors, not "Script error."
+      s.onload = res; s.onerror = rej;
       document.head.appendChild(s);
     });
     return _loaded[src];
