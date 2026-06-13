@@ -92,6 +92,15 @@ create table if not exists public.report_permissions (
   unique (report_id, user_id)
 );
 
+-- ── PROFILE FOLDERS (multi-folder access per user) ──────────
+-- A role='user' may be assigned several folders (people). Each row
+-- grants one user access to one folder. See migration 007.
+create table if not exists public.profile_folders (
+  user_id   uuid not null references auth.users  on delete cascade,
+  person_id text not null references public.people on delete cascade,
+  primary key (user_id, person_id)
+);
+
 -- ============================================================
 -- HELPER: is_admin()
 -- ============================================================
@@ -110,7 +119,14 @@ returns boolean language sql security definer stable as $$
   select public.is_admin()
     or (
       p_person_id is not null
-      and p_person_id = (select person_id from public.profiles where id = auth.uid())
+      and (
+        exists (
+          select 1 from public.profile_folders pf
+          where pf.user_id = auth.uid()
+            and pf.person_id = p_person_id
+        )
+        or p_person_id = (select person_id from public.profiles where id = auth.uid())
+      )
     );
 $$;
 
@@ -148,6 +164,19 @@ alter table public.reports            enable row level security;
 alter table public.notes              enable row level security;
 alter table public.plans              enable row level security;
 alter table public.report_permissions enable row level security;
+alter table public.profile_folders    enable row level security;
+
+-- ── PROFILE_FOLDERS policies ────────────────────────────────
+create policy "profile_folders: admins all"
+  on public.profile_folders for all
+  to authenticated
+  using (public.is_admin())
+  with check (public.is_admin());
+
+create policy "profile_folders: users select own"
+  on public.profile_folders for select
+  to authenticated
+  using (user_id = auth.uid());
 
 -- ── PROFILES policies ───────────────────────────────────────
 -- Any authenticated user can read all profiles

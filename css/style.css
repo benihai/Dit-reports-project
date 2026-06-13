@@ -1337,6 +1337,52 @@ input[type="password"]:focus {
 }
 .users-all-folders { color: var(--text-muted); font-size: .82rem; }
 .users-no-action { color: var(--text-light); }
+.users-no-folder { color: var(--text-light); font-size: .8rem; }
+
+/* ── Multi-folder assignment (admin) ── */
+.folder-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.folder-chip {
+  display: inline-block;
+  font-size: .74rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  white-space: nowrap;
+}
+.folder-check-list {
+  max-height: 210px;
+  overflow-y: auto;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.folder-check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 9px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: .88rem;
+  font-weight: 500;
+  color: var(--text);
+  transition: background .12s;
+}
+.folder-check:hover { background: var(--green-light); }
+.folder-check input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+  accent-color: var(--green);
+  cursor: pointer;
+}
+.folder-new-row { margin-top: 8px; }
 .user-card {
   display: flex;
   align-items: center;

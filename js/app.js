@@ -201,8 +201,10 @@ const App = (() => {
 
     Router.register('/person/:personId', (p) => {
       ReportView.cleanup();
-      if (!Auth.isAdmin() && p.personId === Auth.getAssignedPersonId()) {
-        _safeRender(() => UserHomeView.render());
+      // A folder-scoped user opening one of their folders gets the friendly
+      // UserHome view (with a back button to the folder picker).
+      if (!Auth.isAdmin() && Auth.canAccessPerson(p.personId)) {
+        _safeRender(() => UserHomeView.render(p.personId, { back: true }));
         return;
       }
       _safeRender(() => _guardPerson(p.personId, () => ProjectsView.render(p)));

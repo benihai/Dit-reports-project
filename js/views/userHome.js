@@ -40,9 +40,7 @@ const UserHomeView = (() => {
       </div>`;
   }
 
-  function headerActions(personId) {
-    return `
-      <button class="btn btn-primary btn-sm" onclick="Router.navigate('/person/${personId}/new-project')">+ פרויקט</button>
+  const _accountActions = `
       <button class="btn-icon" onclick="UserHomeView.openProfile()" title="הפרופיל שלי" aria-label="הפרופיל שלי">
         <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
           <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
@@ -56,11 +54,84 @@ const UserHomeView = (() => {
           <line x1="21" y1="12" x2="9" y2="12"/>
         </svg>
       </button>`;
+
+  function headerActions(personId) {
+    return `
+      <button class="btn btn-primary btn-sm" onclick="Router.navigate('/person/${personId}/new-project')">+ פרויקט</button>
+      ${_accountActions}`;
   }
 
-  async function render() {
-    const personId = Auth.getAssignedPersonId();
-    if (!personId || !Auth.canAccessPerson(personId)) {
+  // ── FOLDER PICKER (for users assigned to several folders) ────────────────────
+  function folderPickerCardHtml(person, projectCount) {
+    const initials = (person.name || '?').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+    return `
+      <div class="project-card" onclick="Router.navigate('/person/${person.id}')">
+        <div class="project-card-header">
+          <div class="project-client-initials">${initials}</div>
+          <div>
+            <div class="project-name">${escHtml(person.name)}</div>
+            <div class="project-client">תיקייה</div>
+          </div>
+          <div style="margin-right:auto;">
+            <span class="badge badge-gray">${projectCount} פרויקטים</span>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  async function renderPicker(ids) {
+    App.setHeader('', false, _accountActions);
+    const container = document.getElementById('view-container');
+    container.innerHTML = `<div style="padding:40px;text-align:center;"><div class="spinner" style="width:36px;height:36px;border-color:var(--border);border-top-color:var(--green);"></div></div>`;
+
+    const userName = Auth.getProfile()?.name || Auth.getUser()?.email || 'משתמש';
+    const allPeople = await Storage.People.getAll();
+    const people = allPeople.filter(p => ids.includes(p.id));
+    const projectLists = await Promise.all(people.map(p => Storage.Projects.getForPerson(p.id)));
+
+    const cards = people.map((p, i) => folderPickerCardHtml(p, projectLists[i].length)).join('');
+
+    container.innerHTML = `
+      <div class="welcome-banner user-home-welcome">
+        <div class="welcome-text" style="margin:0 auto;text-align:center;">
+          <h1>ברוכים הבאים ל-DIT Report</h1>
+          <p>מערכת ניהול דוחות פיקוח וסיור</p>
+          <p class="user-home-greeting">שלום, <strong>${escHtml(userName)}</strong></p>
+        </div>
+      </div>
+
+      <div class="user-home-account">
+        <button class="user-home-account-btn" onclick="UserHomeView.openProfile()">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+          </svg>
+          עריכת פרופיל
+        </button>
+        <button class="user-home-account-btn user-home-account-btn-muted" onclick="Auth.logout()">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+          התנתקות
+        </button>
+      </div>
+
+      <div class="user-home-folder">
+        <div class="screen-title">
+          <span>התיקיות שלי</span>
+          <span class="badge badge-gray">${people.length}</span>
+        </div>
+        <p class="user-home-folder-meta">בחר תיקייה כדי לראות את הפרויקטים שלה</p>
+        <div class="user-home-projects">${cards}</div>
+      </div>
+    `;
+
+    _ensureProfileModal();
+  }
+
+  async function render(personId = null, opts = {}) {
+    const ids = Auth.getAssignedPersonIds();
+    if (ids.length === 0) {
       App.showAccessDenied(
         'לא הוקצתה לך תיקייה במערכת. פנה למנהל המערכת.',
         { showLogout: true }
@@ -68,7 +139,20 @@ const UserHomeView = (() => {
       return;
     }
 
-    App.setHeader('', false, headerActions(personId));
+    // No specific folder requested: pick one, or show the picker for many.
+    if (!personId) {
+      if (ids.length > 1) { await renderPicker(ids); return; }
+      personId = ids[0];
+    }
+
+    if (!personId || !Auth.canAccessPerson(personId)) {
+      App.showAccessDenied('אין לך הרשאה לגשת לתיקייה זו', { showLogout: false });
+      return;
+    }
+
+    // Show a back button when the user has several folders (came from the picker).
+    const showBack = opts.back || ids.length > 1;
+    App.setHeader(showBack ? '' : '', showBack, headerActions(personId));
     const container = document.getElementById('view-container');
     container.innerHTML = `<div style="padding:40px;text-align:center;"><div class="spinner" style="width:36px;height:36px;border-color:var(--border);border-top-color:var(--green);"></div></div>`;
 

@@ -1,6 +1,7 @@
 const AdminView = (() => {
-  let _users   = [];
-  let _people  = [];
+  let _users     = [];
+  let _people    = [];
+  let _folderMap = {};   // { userId: [personId, ...] }
 
   function escHtml(s) {
     return String(s == null ? '' : s)
@@ -18,42 +19,42 @@ const AdminView = (() => {
   }
 
   function personName(personId) {
-    if (!personId) return '— לא משויך —';
     const p = _people.find(x => x.id === personId);
     return p ? p.name : personId;
   }
 
-  function folderOptionsHtml(selectedId, includeNew = false) {
-    const opts = _people.map(p =>
-      `<option value="${escHtml(p.id)}" ${p.id === selectedId ? 'selected' : ''}>${escHtml(p.name)}</option>`
-    ).join('');
-    const newOpt = includeNew
-      ? `<option value="__new__" ${selectedId === '__new__' ? 'selected' : ''}>+ צור תיקייה חדשה...</option>`
-      : '';
-    return `<option value="">— בחר תיקייה —</option>${opts}${newOpt}`;
+  // Folders assigned to a user (ids → names), tolerant of the legacy person_id.
+  function userFolderIds(u) {
+    const ids = _folderMap[u.id] ? [..._folderMap[u.id]] : [];
+    if (u.person_id && !ids.includes(u.person_id)) ids.unshift(u.person_id);
+    return ids;
   }
 
-  function folderFieldHtml() {
-    const noFolders = _people.length === 0;
-    return `
-      <div class="form-group" id="new-user-folder-group">
-        <label>תיקייה משויכת <span class="required">*</span></label>
+  function foldersCellHtml(u) {
+    const ids = userFolderIds(u);
+    if (ids.length === 0) return '<span class="users-no-folder">— לא משויך —</span>';
+    return `<div class="folder-chips">${ids.map(id =>
+      `<span class="folder-chip">${escHtml(personName(id))}</span>`).join('')}</div>`;
+  }
 
-        <div id="new-user-folder-existing" class="${noFolders ? 'hidden' : ''}">
-          <select id="new-user-folder" onchange="AdminView.onFolderSelectChange()">
-            ${folderOptionsHtml('', true)}
-          </select>
-          <button type="button" class="btn btn-outline btn-sm folder-inline-btn" onclick="AdminView.showNewFolderForm()">+ תיקייה חדשה</button>
-        </div>
+  // Checkbox list of all folders, pre-checking the given ids.
+  function folderCheckListHtml(selectedIds, listId) {
+    if (_people.length === 0) {
+      return `<p class="form-hint" id="${listId}">אין תיקיות עדיין — צור תיקייה חדשה למטה</p>`;
+    }
+    const sel = new Set(selectedIds || []);
+    return `<div class="folder-check-list" id="${listId}">
+      ${_people.map(p => `
+        <label class="folder-check">
+          <input type="checkbox" value="${escHtml(p.id)}" ${sel.has(p.id) ? 'checked' : ''}>
+          <span>${escHtml(p.name)}</span>
+        </label>`).join('')}
+    </div>`;
+  }
 
-        <div id="new-user-folder-new" class="${noFolders ? '' : 'hidden'}">
-          <input type="text" id="new-folder-name" placeholder="שם התיקייה (למשל: דני כהן)">
-          <p class="form-hint">תיקייה חדשה תיווצר ותשויך אוטומטית למשתמש</p>
-          ${_people.length > 0 ? `
-            <button type="button" class="btn btn-ghost btn-sm folder-inline-btn" onclick="AdminView.showExistingFolderList()">בחר מתיקייה קיימת</button>
-          ` : ''}
-        </div>
-      </div>`;
+  function _checkedFolderIds(listId) {
+    return Array.from(document.querySelectorAll(`#${listId} input[type="checkbox"]:checked`))
+      .map(cb => cb.value);
   }
 
   async function render() {
@@ -67,7 +68,11 @@ const AdminView = (() => {
     container.innerHTML = `<div style="padding:40px;text-align:center;"><div class="spinner" style="width:36px;height:36px;border-color:var(--border);border-top-color:var(--green);"></div></div>`;
 
     try {
-      [_users, _people] = await Promise.all([Auth.getAllUsers(), Storage.People.getAll()]);
+      [_users, _people, _folderMap] = await Promise.all([
+        Auth.getAllUsers(),
+        Storage.People.getAll(),
+        Auth.getAllUserFolders().catch(() => ({})),
+      ]);
       _renderContent();
     } catch (err) {
       container.innerHTML = `<div class="empty-state"><p>שגיאה בטעינה: ${escHtml(err.message)}</p></div>`;
@@ -93,13 +98,11 @@ const AdminView = (() => {
             <td class="users-col-folder">
               ${u.role === 'admin'
                 ? '<span class="users-all-folders">כל התיקיות</span>'
-                : escHtml(personName(u.person_id))}
+                : foldersCellHtml(u)}
             </td>
             <td class="users-col-actions">
               ${u.role !== 'admin' && u.id !== meId ? `
-                <select class="user-folder-select" onchange="AdminView.onRowFolderChange('${escHtml(u.id)}', this)">
-                  ${folderOptionsHtml(u.person_id, true)}
-                </select>
+                <button class="btn btn-outline btn-sm" onclick="AdminView.openFolderEditor('${escHtml(u.id)}')">📁 תיקיות</button>
               ` : ''}
               ${u.id !== meId ? `
                 <button class="btn btn-outline btn-sm btn-danger-text" onclick="AdminView.deleteUser('${escHtml(u.id)}','${escHtml(displayName(u))}')">הסר</button>
@@ -110,8 +113,8 @@ const AdminView = (() => {
 
     container.innerHTML = `
       <div class="admin-intro">
-        <p>כאן ניתן להוסיף משתמשים חדשים, לשייך כל משתמש ל<strong>תיקייה אחת</strong> (מנהל פרויקטים), ולהסיר משתמשים מהמערכת.</p>
-        <p class="admin-intro-note">אין תיקייה? ניתן ליצור תיקייה חדשה ישירות בעת הוספת משתמש.</p>
+        <p>כאן ניתן להוסיף משתמשים חדשים, לשייך כל משתמש ל<strong>תיקייה אחת או יותר</strong> (מנהלי פרויקטים), ולהסיר משתמשים מהמערכת.</p>
+        <p class="admin-intro-note">אין תיקייה? ניתן ליצור תיקייה חדשה ישירות בעת הוספת משתמש או בעריכת התיקיות.</p>
       </div>
 
       <div class="admin-section" style="margin-top:8px;">
@@ -126,7 +129,7 @@ const AdminView = (() => {
                 <th>שם</th>
                 <th>אימייל</th>
                 <th>תפקיד</th>
-                <th>תיקייה</th>
+                <th>תיקיות</th>
                 <th>פעולות</th>
               </tr>
             </thead>
@@ -154,11 +157,18 @@ const AdminView = (() => {
           <div class="form-group">
             <label>תפקיד</label>
             <select id="new-user-role" onchange="AdminView.toggleFolderField()">
-              <option value="user">משתמש — גישה לתיקייה אחת</option>
+              <option value="user">משתמש — גישה לתיקיות נבחרות</option>
               <option value="admin">מנהל מערכת — גישה מלאה</option>
             </select>
           </div>
-          ${folderFieldHtml()}
+          <div class="form-group" id="new-user-folder-group">
+            <label>תיקיות משויכות <span class="required">*</span></label>
+            <p class="form-hint">סמן תיקייה אחת או יותר שאליהן למשתמש תהיה גישה</p>
+            ${folderCheckListHtml([], 'new-user-folders')}
+            <div class="folder-new-row">
+              <input type="text" id="new-folder-name" placeholder="+ צור תיקייה חדשה (אופציונלי)">
+            </div>
+          </div>
           <div id="create-user-error" class="login-error hidden"></div>
           <div class="modal-actions">
             <button class="btn btn-outline" onclick="AdminView.hideCreateUser()">ביטול</button>
@@ -167,61 +177,25 @@ const AdminView = (() => {
         </div>
       </div>
 
-      <div id="new-folder-prompt-overlay" class="modal-overlay hidden" onclick="if(event.target===this) AdminView.hideNewFolderPrompt()">
-        <div class="modal-box" onclick="event.stopPropagation()" style="max-width:360px;">
+      <div id="folder-editor-overlay" class="modal-overlay hidden" onclick="if(event.target===this) AdminView.hideFolderEditor()">
+        <div class="modal-box" onclick="event.stopPropagation()">
           <div class="modal-handle"></div>
-          <div class="modal-title">תיקייה חדשה</div>
+          <div class="modal-title" id="folder-editor-title">תיקיות משויכות</div>
           <div class="form-group">
-            <label>שם התיקייה</label>
-            <input type="text" id="row-new-folder-name" placeholder="למשל: דני כהן">
+            <p class="form-hint">סמן את כל התיקיות שאליהן למשתמש תהיה גישה</p>
+            <div id="folder-editor-list-wrap"></div>
+            <div class="folder-new-row">
+              <input type="text" id="editor-new-folder-name" placeholder="+ צור תיקייה חדשה (אופציונלי)">
+            </div>
           </div>
+          <div id="folder-editor-error" class="login-error hidden"></div>
           <div class="modal-actions">
-            <button class="btn btn-outline" onclick="AdminView.hideNewFolderPrompt()">ביטול</button>
-            <button class="btn btn-primary" id="row-new-folder-btn" onclick="AdminView.saveNewFolderForUser()">צור ושייך</button>
+            <button class="btn btn-outline" onclick="AdminView.hideFolderEditor()">ביטול</button>
+            <button class="btn btn-primary" id="folder-editor-btn" onclick="AdminView.saveFolderEditor()">שמור</button>
           </div>
         </div>
       </div>
     `;
-  }
-
-  let _pendingFolderUserId = null;
-
-  function showNewFolderForm() {
-    document.getElementById('new-user-folder-existing')?.classList.add('hidden');
-    document.getElementById('new-user-folder-new')?.classList.remove('hidden');
-    document.getElementById('new-folder-name')?.focus();
-  }
-
-  function showExistingFolderList() {
-    document.getElementById('new-user-folder-new')?.classList.add('hidden');
-    document.getElementById('new-user-folder-existing')?.classList.remove('hidden');
-    const sel = document.getElementById('new-user-folder');
-    if (sel) sel.value = '';
-  }
-
-  function onFolderSelectChange() {
-    const sel = document.getElementById('new-user-folder');
-    if (sel?.value === '__new__') {
-      sel.value = '';
-      showNewFolderForm();
-    }
-  }
-
-  function onRowFolderChange(userId, selectEl) {
-    if (selectEl.value === '__new__') {
-      _pendingFolderUserId = userId;
-      selectEl.value = '';
-      document.getElementById('row-new-folder-name').value = '';
-      document.getElementById('new-folder-prompt-overlay')?.classList.remove('hidden');
-      setTimeout(() => document.getElementById('row-new-folder-name')?.focus(), 80);
-      return;
-    }
-    if (selectEl.value) changeFolder(userId, selectEl.value);
-  }
-
-  function hideNewFolderPrompt() {
-    _pendingFolderUserId = null;
-    document.getElementById('new-folder-prompt-overlay')?.classList.add('hidden');
   }
 
   async function _createPerson(name) {
@@ -231,45 +205,7 @@ const AdminView = (() => {
     return person;
   }
 
-  async function saveNewFolderForUser() {
-    const name = document.getElementById('row-new-folder-name')?.value.trim();
-    const btn  = document.getElementById('row-new-folder-btn');
-    if (!name) { App.toast('נא להזין שם תיקייה'); return; }
-    if (!_pendingFolderUserId) return;
-
-    btn.disabled = true;
-    btn.textContent = 'יוצר...';
-    try {
-      const person = await _createPerson(name);
-      await Auth.updateUserFolder(_pendingFolderUserId, person.id);
-      hideNewFolderPrompt();
-      App.toast(`התיקייה "${name}" נוצרה ושויכה`);
-      await render();
-    } catch (err) {
-      App.toast('שגיאה: ' + (err.message || ''));
-      btn.disabled = false;
-      btn.textContent = 'צור ושייך';
-    }
-  }
-
-  async function _resolvePersonId(role) {
-    if (role !== 'user') return null;
-
-    const existingEl = document.getElementById('new-user-folder-existing');
-    const isNewMode  = existingEl?.classList.contains('hidden');
-
-    if (isNewMode || _people.length === 0) {
-      const folderName = document.getElementById('new-folder-name')?.value.trim();
-      if (!folderName) return { error: 'יש להזין שם לתיקייה החדשה' };
-      const person = await _createPerson(folderName);
-      return { personId: person.id };
-    }
-
-    const personId = document.getElementById('new-user-folder')?.value;
-    if (!personId) return { error: 'יש לבחור תיקייה למשתמש' };
-    return { personId };
-  }
-
+  // ── CREATE USER ──────────────────────────────────────────────────────────
   function showCreateUser() {
     const overlay = document.getElementById('create-user-overlay');
     if (!overlay) return;
@@ -278,10 +214,9 @@ const AdminView = (() => {
     document.getElementById('new-user-password').value = '';
     document.getElementById('new-user-role').value     = 'user';
     document.getElementById('new-folder-name').value   = '';
+    document.querySelectorAll('#new-user-folders input[type="checkbox"]').forEach(cb => cb.checked = false);
     document.getElementById('create-user-error').classList.add('hidden');
     toggleFolderField();
-    if (_people.length === 0) showNewFolderForm();
-    else showExistingFolderList();
     overlay.classList.remove('hidden');
   }
 
@@ -319,20 +254,24 @@ const AdminView = (() => {
     btn.textContent = 'יוצר...';
 
     try {
-      let personId = null;
+      let personIds = [];
       if (role === 'user') {
-        const resolved = await _resolvePersonId(role);
-        if (resolved.error) {
-          errEl.textContent = resolved.error;
+        personIds = _checkedFolderIds('new-user-folders');
+        const newName = document.getElementById('new-folder-name')?.value.trim();
+        if (newName) {
+          const person = await _createPerson(newName);
+          personIds.push(person.id);
+        }
+        if (personIds.length === 0) {
+          errEl.textContent = 'יש לבחור לפחות תיקייה אחת (או ליצור חדשה)';
           errEl.classList.remove('hidden');
           btn.disabled = false;
           btn.textContent = 'צור משתמש';
           return;
         }
-        personId = resolved.personId;
       }
 
-      await Auth.createUser(email, password, name || email, role, personId);
+      await Auth.createUser(email, password, name || email, role, personIds);
       hideCreateUser();
       App.toast('המשתמש נוצר בהצלחה');
       await render();
@@ -344,15 +283,57 @@ const AdminView = (() => {
     }
   }
 
-  async function changeFolder(userId, personId) {
-    if (!personId) return;
+  // ── FOLDER EDITOR (per existing user) ────────────────────────────────────
+  let _editorUserId = null;
+
+  function openFolderEditor(userId) {
+    const u = _users.find(x => x.id === userId);
+    if (!u) return;
+    _editorUserId = userId;
+    document.getElementById('folder-editor-title').textContent = `תיקיות משויכות — ${displayName(u)}`;
+    document.getElementById('folder-editor-list-wrap').innerHTML =
+      folderCheckListHtml(userFolderIds(u), 'folder-editor-list');
+    document.getElementById('editor-new-folder-name').value = '';
+    document.getElementById('folder-editor-error').classList.add('hidden');
+    document.getElementById('folder-editor-overlay').classList.remove('hidden');
+  }
+
+  function hideFolderEditor() {
+    _editorUserId = null;
+    document.getElementById('folder-editor-overlay')?.classList.add('hidden');
+  }
+
+  async function saveFolderEditor() {
+    if (!_editorUserId) return;
+    const errEl = document.getElementById('folder-editor-error');
+    const btn   = document.getElementById('folder-editor-btn');
+    errEl.classList.add('hidden');
+
+    btn.disabled = true;
+    btn.textContent = 'שומר...';
     try {
-      await Auth.updateUserFolder(userId, personId);
-      App.toast('התיקייה עודכנה');
+      const ids = _checkedFolderIds('folder-editor-list');
+      const newName = document.getElementById('editor-new-folder-name')?.value.trim();
+      if (newName) {
+        const person = await _createPerson(newName);
+        ids.push(person.id);
+      }
+      if (ids.length === 0) {
+        errEl.textContent = 'יש לבחור לפחות תיקייה אחת (או ליצור חדשה)';
+        errEl.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = 'שמור';
+        return;
+      }
+      await Auth.setUserFolders(_editorUserId, ids);
+      hideFolderEditor();
+      App.toast('התיקיות עודכנו');
       await render();
     } catch (err) {
-      App.toast('שגיאה: ' + (err.message || 'נסה שנית'));
-      await render();
+      errEl.textContent = err.message || 'שגיאה בשמירה';
+      errEl.classList.remove('hidden');
+      btn.disabled = false;
+      btn.textContent = 'שמור';
     }
   }
 
@@ -377,14 +358,10 @@ const AdminView = (() => {
     showCreateUser,
     hideCreateUser,
     toggleFolderField,
-    showNewFolderForm,
-    showExistingFolderList,
-    onFolderSelectChange,
-    onRowFolderChange,
-    hideNewFolderPrompt,
-    saveNewFolderForUser,
     createUser,
-    changeFolder,
+    openFolderEditor,
+    hideFolderEditor,
+    saveFolderEditor,
     deleteUser,
   };
 })();

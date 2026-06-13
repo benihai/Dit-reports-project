@@ -64,6 +64,27 @@ const Auth = (() => {
     return (!error && data) ? data : profile;
   }
 
+  // Attach the list of folders (people) the user may access. A user can now be
+  // assigned several folders via the profile_folders table; profiles.person_id
+  // remains the "primary" one (first selected) and is always included.
+  async function _attachFolders(profile) {
+    if (!profile) return profile;
+    try {
+      const { data, error } = await _supabase
+        .from('profile_folders')
+        .select('person_id')
+        .eq('user_id', profile.id);
+      if (error) throw error;
+      const ids = (data || []).map(r => r.person_id).filter(Boolean);
+      if (profile.person_id && !ids.includes(profile.person_id)) ids.unshift(profile.person_id);
+      profile.personIds = ids;
+    } catch (_) {
+      // Offline / RLS hiccup — fall back to the single legacy folder.
+      profile.personIds = profile.person_id ? [profile.person_id] : [];
+    }
+    return profile;
+  }
+
   // ── Offline profile cache ────────────────────────────────────────────────
   // The session itself is persisted by Supabase (persistSession). But the role
   // lives in the `profiles` table, which needs the network. We cache it so a
@@ -116,6 +137,7 @@ const Auth = (() => {
       if (error) throw error;
       if (data) {
         _currentProfile = await _syncMissingFields(data);
+        _currentProfile = await _attachFolders(_currentProfile);   // load assigned folders
         _cacheProfile(_currentProfile);   // keep a copy for offline boot
         return _currentProfile;
       }
@@ -150,14 +172,23 @@ const Auth = (() => {
   function isAdmin()    { return _currentProfile?.role === 'admin'; }
   function isLoggedIn() { return !!_currentUser; }
 
+  // All folders the user can access (multi-folder). Falls back to the single
+  // legacy person_id when the folder list hasn't been loaded (e.g. offline).
+  function getAssignedPersonIds() {
+    const ids = _currentProfile?.personIds;
+    if (Array.isArray(ids) && ids.length) return ids;
+    return _currentProfile?.person_id ? [_currentProfile.person_id] : [];
+  }
+
+  // Primary / default folder — first in the list (back-compat).
   function getAssignedPersonId() {
-    return _currentProfile?.person_id || null;
+    return getAssignedPersonIds()[0] || null;
   }
 
   function canAccessPerson(personId) {
     if (!personId) return false;
     if (isAdmin()) return true;
-    return getAssignedPersonId() === personId;
+    return getAssignedPersonIds().includes(personId);
   }
 
   async function canAccessProject(projectId) {
@@ -209,7 +240,12 @@ const Auth = (() => {
     return _currentProfile;
   }
 
-  async function createUser(email, password, name, role, personId) {
+  // personIds: array of folder (person) ids. The first is stored as the
+  // primary profiles.person_id; all of them are written to profile_folders.
+  async function createUser(email, password, name, role, personIds = []) {
+    const ids = Array.isArray(personIds) ? personIds.filter(Boolean) : (personIds ? [personIds] : []);
+    const primaryId = ids[0] || null;
+
     const tempClient = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
       auth: {
         persistSession: false,
@@ -222,7 +258,7 @@ const Auth = (() => {
       email,
       password,
       options: {
-        data: { name, role, person_id: personId || '' }
+        data: { name, role, person_id: primaryId || '' }
       }
     });
     if (error) throw error;
@@ -240,7 +276,7 @@ const Auth = (() => {
       email,
       name: name || email,
       role,
-      person_id: personId || null,
+      person_id: primaryId,
     };
 
     let saved = null;
@@ -252,6 +288,12 @@ const Auth = (() => {
         if (attempt === 5) throw err;
         await new Promise(r => setTimeout(r, 350));
       }
+    }
+
+    // Write the full folder list (best-effort with a short retry — the profile
+    // row must exist first, which the loop above guarantees).
+    if (role === 'user' && ids.length) {
+      await setUserFolders(data.user.id, ids).catch(() => {});
     }
 
     return { ...data, profile: saved };
@@ -303,15 +345,61 @@ const Auth = (() => {
     return data;
   }
 
-  async function updateUserFolder(userId, personId) {
+  // ── Multi-folder assignment (admin) ──────────────────────────────────────
+  // Folders the given user is assigned to.
+  async function getUserFolders(userId) {
+    const { data, error } = await _supabase
+      .from('profile_folders')
+      .select('person_id')
+      .eq('user_id', userId);
+    if (error) throw error;
+    return (data || []).map(r => r.person_id).filter(Boolean);
+  }
+
+  // Folder assignments for ALL users, as { userId: [personId, ...] }.
+  async function getAllUserFolders() {
+    const { data, error } = await _supabase
+      .from('profile_folders')
+      .select('user_id, person_id');
+    if (error) throw error;
+    const map = {};
+    (data || []).forEach(r => {
+      if (!map[r.user_id]) map[r.user_id] = [];
+      map[r.user_id].push(r.person_id);
+    });
+    return map;
+  }
+
+  // Replace the user's entire folder set. The first id is also mirrored to
+  // profiles.person_id as the primary/default folder.
+  async function setUserFolders(userId, personIds) {
+    const ids = (personIds || []).filter(Boolean);
+
+    const { error: delError } = await _supabase
+      .from('profile_folders')
+      .delete()
+      .eq('user_id', userId);
+    if (delError) throw delError;
+
+    if (ids.length) {
+      const rows = ids.map(person_id => ({ user_id: userId, person_id }));
+      const { error: insError } = await _supabase.from('profile_folders').insert(rows);
+      if (insError) throw insError;
+    }
+
     const { data, error } = await _supabase
       .from('profiles')
-      .update({ person_id: personId || null })
+      .update({ person_id: ids[0] || null })
       .eq('id', userId)
       .select()
       .single();
     if (error) throw error;
     return data;
+  }
+
+  // Back-compat single-folder setter (assigns exactly one folder).
+  async function updateUserFolder(userId, personId) {
+    return setUserFolders(userId, personId ? [personId] : []);
   }
 
   async function deleteUser(userId) {
@@ -365,6 +453,7 @@ const Auth = (() => {
     adoptStoredUserOffline,
     wasLogoutRequested,
     getAssignedPersonId,
+    getAssignedPersonIds,
     canAccessPerson,
     canAccessProject,
     canAccessReport,
@@ -373,6 +462,9 @@ const Auth = (() => {
     updateUserRole,
     updateMyProfile,
     updateUserFolder,
+    getUserFolders,
+    getAllUserFolders,
+    setUserFolders,
     deleteUser,
     getReportPermissions,
     setReportPermissions,
