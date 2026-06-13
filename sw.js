@@ -1,4 +1,4 @@
-const CACHE = 'dit-v45';
+const CACHE = 'dit-v46';
 
 const SHELL = [
   './',
@@ -28,8 +28,10 @@ const SHELL = [
   './js/emailShare.js',
   './js/app.js',
   './icons/dit-logo.png',
-  './icons/icon-192.svg',
-  './icons/icon-512.svg',
+  './icons/icon-180.png',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './manifest.json',
 ];
 
 self.addEventListener('install', e => {
