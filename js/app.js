@@ -341,6 +341,26 @@ const App = (() => {
     if (navigator.onLine) Storage.prefetchForOffline();
   }
 
+  // Shown when a new SW activates mid-session (the user is already working, so we
+  // can't silently reload without risking unsaved edits). Lets them refresh when
+  // it's convenient. Idempotent — never stacks more than one banner.
+  function _showUpdateBanner() {
+    if (document.getElementById('update-banner')) return;
+    const bar = document.createElement('div');
+    bar.id = 'update-banner';
+    bar.dir = 'rtl';
+    bar.style.cssText =
+      'position:fixed;left:12px;right:12px;bottom:12px;z-index:9999;max-width:520px;margin:0 auto;' +
+      'background:#1f2937;color:#fff;border-radius:10px;padding:12px 16px;' +
+      'box-shadow:0 6px 20px rgba(0,0,0,.25);display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:.92rem;';
+    bar.innerHTML =
+      '<span>גרסה חדשה זמינה</span>' +
+      '<button id="update-banner-btn" style="flex:none;padding:8px 18px;background:#8DC63F;color:#fff;' +
+      'border:none;border-radius:6px;cursor:pointer;font-size:.9rem;font-weight:600;">רענן עכשיו</button>';
+    document.body.appendChild(bar);
+    document.getElementById('update-banner-btn').onclick = () => window.location.reload();
+  }
+
   // ── Boot ───────────────────────────────────────────────────────────────────
 
   async function init() {
@@ -349,12 +369,31 @@ const App = (() => {
     // user always gets fresh code — but only if the app hasn't started yet
     // (i.e. they're on the loading/login screen, not mid-session).
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js').catch(() => {});
+      // updateViaCache:'none' — never serve sw.js itself from the HTTP cache, so
+      // an update check always sees the freshly deployed file (critical on iOS,
+      // where a stale sw.js would otherwise hide new deployments for hours/days).
+      navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
+        .then(reg => {
+          // The app is a home-screen PWA with hash routing — it has no real page
+          // navigations, so the browser never auto-checks for a new sw.js on its
+          // own. We force the check ourselves: every 30 min while open, and every
+          // time the user returns to the app (re-opens it / brings it back from
+          // the background). reg.update() re-fetches sw.js; if it changed, the new
+          // SW installs → skipWaiting → activate → controllerchange fires below.
+          const checkForUpdate = () => reg.update().catch(() => {});
+          setInterval(checkForUpdate, 30 * 60 * 1000);
+          document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') checkForUpdate();
+          });
+        })
+        .catch(() => {});
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        // Only auto-reload before the user starts working (login/loading screen).
-        // Reloading mid-session would discard unsaved edits — let the fresh code
-        // apply on the next natural load instead.
+        // A new SW took control. Before the user starts working (login/loading
+        // screen) just reload for the fresh code. Mid-session we don't reload —
+        // that would discard unsaved edits — instead we surface a banner so the
+        // user can refresh when it's convenient.
         if (!_appStarted) window.location.reload();
+        else _showUpdateBanner();
       });
     }
 
