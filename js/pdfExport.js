@@ -105,7 +105,9 @@ const PdfExport = (() => {
   // REPORT HEADER
   // 3-column: [DIT logo] | [centered title] | [client logo slot]
   // ─────────────────────────────────────────────────────────────────────────────
-  function reportHeaderHtml(clientLogoSrc, clientName, report, ditLogoSrc = 'icons/dit-logo.png') {
+  function reportHeaderHtml(clientLogoSrc, clientName, report, ditLogoSrc = 'icons/dit-logo.png', projectName = '') {
+    // Small survey name line, e.g. "סיור פיקוח - בורסה לניירות ערך"
+    const surveyName = [report.description, projectName].map(s => (s || '').trim()).filter(Boolean).join(' - ');
     const clientSlot = clientLogoSrc
       ? `<img src="${clientLogoSrc}" alt="${esc(clientName)}"
            style="height:60px;width:auto;max-width:140px;object-fit:contain;display:block;">`
@@ -141,8 +143,10 @@ const PdfExport = (() => {
                         color:#6B6B6B;margin-top:4px;">
               DIT — Design It Right · יעוץ, תכנון וניהול פרוייקטים טכנולוגים
             </div>
+            ${surveyName ? `<div style="font-family:'Heebo',Arial,sans-serif;font-size:12px;
+                        font-weight:600;color:#3A3A3A;margin-top:5px;">${esc(surveyName)}</div>` : ''}
             <div style="font-family:monospace;font-size:11px;color:#6B6B6B;
-                        letter-spacing:.06em;margin-top:6px;">
+                        letter-spacing:.06em;margin-top:4px;">
               REP-${String(report.reportNumber).padStart(4,'0')} · ${formatDate(report.date)}
             </div>
           </div>
@@ -263,11 +267,11 @@ const PdfExport = (() => {
     return `
       <article data-finding-card="1"
                style="background:#fff;border:1px solid #E6E6E2;border-radius:8px;
-                      box-shadow:0 1px 2px rgba(26,26,26,.06);overflow:hidden;
-                      margin-bottom:16px;page-break-inside:avoid;">
+                      box-shadow:0 1px 2px rgba(26,26,26,.06);
+                      margin-bottom:16px;">
 
         <!-- Card head: right=badge+location, left=ref -->
-        <div style="display:flex;align-items:center;justify-content:space-between;
+        <div data-finding-head="1" style="display:flex;align-items:center;justify-content:space-between;
                     padding:10px 16px;border-bottom:1px solid #E6E6E2;background:#FAFAF8;
                     direction:rtl;gap:8px;">
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:nowrap;overflow:hidden;">
@@ -469,7 +473,7 @@ const PdfExport = (() => {
     return `
       <div class="dit-report" style="font-family:'Heebo',Arial,sans-serif;direction:rtl;
                   background:#fff;color:#1A1A1A;line-height:1.5;">
-        ${reportHeaderHtml(clientLogoSrc, clientName, report, ditLogoSrc)}
+        ${reportHeaderHtml(clientLogoSrc, clientName, report, ditLogoSrc, project?.name || '')}
         ${metadataBlockHtml(report, project)}
         ${filterBanner}
         ${findingsHtml}
@@ -563,20 +567,18 @@ const PdfExport = (() => {
     *, *::before, *::after { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: #fff; direction: rtl; text-align: right; }
 
-    /* margin: 0 removes browser URL/date/page-number headers and footers.
-       top/bottom 10mm gives breathing room so content is not clipped at page edges. */
-    @page { size: A4 portrait; margin: 10mm 0; }
-    @page :first { margin-top: 0; }
+    /* margin: 0 on ALL sides removes the browser's own headers/footers
+       (page title / "about:blank", the site URL, date and page numbers). */
+    @page { size: A4 portrait; margin: 0; }
 
     @media print {
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .dit-report { padding: 0 !important; }
-      [data-finding-card] {
-        page-break-inside: avoid;
-        break-inside: avoid;
-        orphans: 4;
-        widows: 4;
-      }
+      /* Keep each finding whole — a card is never cut in the middle. If it
+         doesn't fit in the remaining space it moves as a block to the next
+         page. Only a card taller than a full page may break, and even then an
+         individual image is never split. */
+      [data-finding-card] { break-inside: avoid; page-break-inside: avoid; }
       figure, img { page-break-inside: avoid; break-inside: avoid; }
     }
     img { max-width: 100%; }
@@ -588,7 +590,10 @@ const PdfExport = (() => {
     const html = await buildHtml(report, notes, project, opts);
     const _desc = (report.description || '').replace(/[\\/:*?"<>|]/g,'').replace(/\s+/g,' ').trim();
     const _proj = (project?.name || 'DIT').replace(/[\\/:*?"<>|]/g,'').replace(/\s+/g,' ').trim();
-    const fname = `${_desc || ('דוח ' + report.reportNumber)} - ${_proj}`;
+    // Survey date for the filename: "2026-06-14" → "14-06-2026" (slashes are
+    // invalid in filenames, so we use dashes).
+    const _date = (report.date || '').split('-').reverse().join('-');
+    const fname = [ _desc || ('דוח ' + report.reportNumber), _proj, _date ].filter(Boolean).join(' - ');
 
     const win = window.open('', '_blank');
     if (!win) { App.toast('יש לאפשר חלון קופץ בדפדפן'); return; }
