@@ -1,4 +1,4 @@
-const CACHE = 'dit-v53';
+const CACHE = 'dit-v54';
 
 const SHELL = [
   './',
@@ -58,10 +58,39 @@ self.addEventListener('fetch', e => {
   // Don't intercept Supabase API calls — let them reach the network directly
   if (url.hostname.includes('supabase.co')) return;
 
+  // Network-first for the app shell (the HTML document). Always try the network
+  // so a new deployment is picked up the moment the device is online, instead of
+  // a cached shell masking it. This is the key fix for iOS: there the SW serving
+  // cache-first could keep showing an old version indefinitely (iOS throttles SW
+  // updates, and deleting the home-screen icon does NOT clear the SW or caches —
+  // they live at the origin level). Falls back to the cached shell when offline.
+  const isShell = e.request.mode === 'navigate' ||
+                  url.pathname.endsWith('/') ||
+                  url.pathname.endsWith('/index.html');
+  if (isShell) {
+    e.respondWith(
+      fetch(e.request)
+        .then(res => {
+          if (res && res.status === 200) {
+            const clone = res.clone();
+            caches.open(CACHE).then(c => c.put(e.request, clone));
+          }
+          return res;
+        })
+        .catch(() =>
+          caches.match(e.request)
+            .then(r => r || caches.match('./index.html'))
+            .then(r => r || new Response('Offline', { status: 503, statusText: 'Offline' }))
+        )
+    );
+    return;
+  }
+
+  // Everything else (version-stamped JS/CSS, images, fonts): stale-while-
+  // revalidate — serve cache immediately, refresh in the background. Safe because
+  // these URLs carry ?v=, so a new build requests new URLs not yet in the cache.
   e.respondWith(
     caches.match(e.request).then(cached => {
-      // Stale-while-revalidate: serve cache immediately, update in background.
-      // If fetch fails, fall back to cached index.html (app shell).
       const network = fetch(e.request)
         .then(res => {
           if (res && res.status === 200) {
