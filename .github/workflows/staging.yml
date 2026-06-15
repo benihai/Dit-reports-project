@@ -22,6 +22,18 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      # Install the render-pdf function's deps (@sparticuz/chromium etc.) so
+      # Netlify can bundle them. The action deploys via API and does not run an
+      # npm install itself, so node_modules must exist before the deploy step.
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install function deps
+        continue-on-error: true
+        run: npm install --no-audit --no-fund
+
       - name: Deploy to Netlify
         uses: nwtgck/actions-netlify@v2
         continue-on-error: true

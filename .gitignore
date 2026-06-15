@@ -9,3 +9,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Node — only used by netlify/functions during the Netlify build, never committed
+node_modules/
