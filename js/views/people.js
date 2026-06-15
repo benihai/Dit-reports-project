@@ -39,9 +39,7 @@ const PeopleView = (() => {
     App.setHeader('', false, (headerActionsHtml || '') + addBtn);
 
     const people = await Storage.People.getAll();
-    const counts = await Promise.all(
-      people.map(p => Storage.Projects.getForPerson(p.id).then(l => l.length))
-    );
+    const countMap = await Storage.Projects.countsByPerson(people.map(p => p.id));
 
     const container = document.getElementById('view-container');
 
@@ -76,7 +74,7 @@ const PeopleView = (() => {
         <span class="badge badge-gray">${people.length}</span>
       </div>
       <div class="people-grid">
-        ${people.map((p, i) => personCardHtml(p, counts[i])).join('')}
+        ${people.map(p => personCardHtml(p, countMap[p.id] || 0)).join('')}
       </div>
     `;
   }

@@ -37,23 +37,38 @@ const Storage = (() => {
   // cache of large *server* data (e.g. plans).
   function _lfSetForce(k, d) { localforage.setItem('dc:' + k, d).catch(() => {}); }
 
+  // In-flight request dedup: the memory cache is only populated AFTER fn()
+  // resolves, so two callers asking for the same key concurrently would both see
+  // an empty cache and each fire their own network request. Sharing one promise
+  // per key collapses those into a single request.
+  const _inflight = {};
+
   // Try memory → network (cache result) → localforage offline fallback.
   // opts.fallback: value to return when OFFLINE and nothing is cached, instead
   // of throwing — lets views render (empty) offline rather than crashing.
-  async function _query(key, fn, opts = {}) {
+  function _query(key, fn, opts = {}) {
     const mem = _mGet(key);
-    if (mem) return mem;
-    try {
-      const r = await fn();
-      _mSet(key, r);
-      _lfSet(key, r);
-      return r;
-    } catch (err) {
-      const lf = await _lfGet(key);
-      if (lf != null) { _mSet(key, lf); return lf; }
-      if (opts.fallback !== undefined && !navigator.onLine) return opts.fallback;
-      throw err;
-    }
+    if (mem) return Promise.resolve(mem);
+    if (_inflight[key]) return _inflight[key];
+
+    const p = (async () => {
+      try {
+        const r = await fn();
+        _mSet(key, r);
+        _lfSet(key, r);
+        return r;
+      } catch (err) {
+        const lf = await _lfGet(key);
+        if (lf != null) { _mSet(key, lf); return lf; }
+        if (opts.fallback !== undefined && !navigator.onLine) return opts.fallback;
+        throw err;
+      } finally {
+        delete _inflight[key];
+      }
+    })();
+
+    _inflight[key] = p;
+    return p;
   }
 
   // ── Mapping helpers ────────────────────────────────────────────────────────
@@ -293,6 +308,23 @@ const Storage = (() => {
         throwIf(error);
         return (data || []).map(mapProject);
       }, { fallback: [] });
+    },
+    // Lightweight project-count-per-person in ONE query (avoids N+1 + pulling
+    // full project rows just to count). Falls back to per-person on error.
+    async countsByPerson(personIds) {
+      const ids = (personIds || []).filter(Boolean);
+      const counts = {};
+      ids.forEach(id => { counts[id] = 0; });
+      if (!ids.length) return counts;
+      try {
+        const { data, error } = await _supabase.from('projects').select('person_id').in('person_id', ids);
+        throwIf(error);
+        (data || []).forEach(r => { counts[r.person_id] = (counts[r.person_id] || 0) + 1; });
+        return counts;
+      } catch (_) {
+        await Promise.all(ids.map(async id => { counts[id] = (await Projects.getForPerson(id)).length; }));
+        return counts;
+      }
     },
     async get(id) {
       return _query(`project_${id}`, async () => {
