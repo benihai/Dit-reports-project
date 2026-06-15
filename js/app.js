@@ -385,6 +385,14 @@ const App = (() => {
           document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') checkForUpdate();
           });
+          // iOS standalone PWAs are frozen when backgrounded and RESTORED from the
+          // bfcache when reopened (pageshow with persisted=true) — a real reload,
+          // and visibilitychange, often never fire in that path. pageshow is the
+          // reliable hook to re-check for a new version the moment the user taps
+          // the home-screen icon. This is the single biggest gap on iOS.
+          window.addEventListener('pageshow', (e) => {
+            if (e.persisted) checkForUpdate();
+          });
         })
         .catch(() => {});
       navigator.serviceWorker.addEventListener('controllerchange', () => {
