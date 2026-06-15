@@ -1,4 +1,4 @@
-const CACHE = 'dit-v54';
+const CACHE = 'dit-v55';
 
 const SHELL = [
   './',
@@ -55,6 +55,11 @@ self.addEventListener('fetch', e => {
 
   const url = new URL(e.request.url);
 
+  // Only handle http(s). Extension-injected resources use schemes like
+  // chrome-extension:// which the Cache API can't store — cache.put() throws
+  // "Request scheme 'chrome-extension' is unsupported". Let them pass through.
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+
   // Don't intercept Supabase API calls — let them reach the network directly
   if (url.hostname.includes('supabase.co')) return;
 
@@ -73,7 +78,7 @@ self.addEventListener('fetch', e => {
         .then(res => {
           if (res && res.status === 200) {
             const clone = res.clone();
-            caches.open(CACHE).then(c => c.put(e.request, clone));
+            caches.open(CACHE).then(c => c.put(e.request, clone)).catch(() => {});
           }
           return res;
         })
@@ -95,7 +100,7 @@ self.addEventListener('fetch', e => {
         .then(res => {
           if (res && res.status === 200) {
             const clone = res.clone();
-            caches.open(CACHE).then(c => c.put(e.request, clone));
+            caches.open(CACHE).then(c => c.put(e.request, clone)).catch(() => {});
           }
           return res;
         })
