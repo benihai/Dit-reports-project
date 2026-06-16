@@ -574,19 +574,31 @@ const PdfExport = (() => {
   const _PRINT_CSS = `
     @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;600;700;800&display=swap');
     *, *::before, *::after { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; background: #fff; direction: rtl; text-align: right; }
 
-    /* margin: 0 on ALL sides removes the browser's own headers/footers
-       (page title / "about:blank", the site URL, date and page numbers). */
-    @page { size: A4 portrait; margin: 0; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #fff;
+      direction: rtl;
+      text-align: right;
+      min-width: 794px;
+    }
+
+    @page { size: A4 portrait; margin: 0mm; }
 
     @media print {
-      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .dit-report { padding: 0 !important; }
-      /* Keep each finding whole — a card is never cut in the middle. If it
-         doesn't fit in the remaining space it moves as a block to the next
-         page. Only a card taller than a full page may break, and even then an
-         individual image is never split. */
+      body {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        width: 794px !important;
+        margin: 0 auto !important;
+      }
+
+      .dit-report {
+        padding-top: 10mm !important;
+        padding-bottom: 10mm !important;
+      }
+
       [data-finding-card] { break-inside: avoid; page-break-inside: avoid; }
       figure, img { page-break-inside: avoid; break-inside: avoid; }
     }
@@ -611,6 +623,7 @@ const PdfExport = (() => {
 <html dir="rtl" lang="he">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=794, initial-scale=1.0">
   <title>${fname}</title>
   <style>${_PRINT_CSS}</style>
 </head>
