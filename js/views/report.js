@@ -308,11 +308,35 @@ const ReportView = (() => {
          </div>`
       : '';
 
+    const done = note.status === 'done';
+    const task = !!note.personalTask;
+
+    // Status-tracking footer: complete toggle, personal-task toggle, and a
+    // free-text status note. Editable for admins; read-only viewers just see
+    // the "done" badge and any status note text.
+    const trackHtml = _readOnly ? (note.statusNote
+        ? `<div class="note-status-ro">📋 ${escHtml(note.statusNote)}</div>` : '')
+      : `
+        <div class="note-track" onclick="event.stopPropagation()">
+          <div class="note-track-actions">
+            <button class="track-btn done-toggle${done ? ' active' : ''}" onclick="ReportView.toggleComplete('${note.id}')">
+              ${done ? '✓ הושלם' : 'סמן כהושלם'}
+            </button>
+            <button class="track-btn task-toggle${task ? ' active' : ''}" onclick="ReportView.togglePersonalTask('${note.id}')">
+              ${task ? '★ במעקב אישי' : '☆ הוסף למעקב'}
+            </button>
+          </div>
+          <textarea class="status-note-input" placeholder="סטטוס ביצוע — מה מעכב? דגשים להשלמה…"
+            onfocus="event.stopPropagation()"
+            onblur="ReportView.saveStatusNote('${note.id}', this.value)">${escHtml(note.statusNote)}</textarea>
+        </div>`;
+
     return `
-      <div class="note-card" onclick="ReportView.editNote('${note.id}')">
+      <div class="note-card${done ? ' note-card-done' : ''}" onclick="ReportView.editNote('${note.id}')">
         <div class="note-card-header">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
             <span class="note-number">ממצא ${noteNum || note.noteNumber || '?'}</span>
+            ${done ? '<span class="done-badge">✓ הושלם</span>' : ''}
             ${note.tag ? `<span class="tag-badge tag-${NoteModal.tagSlug(note.tag)}">${escHtml(note.tag)}</span>` : ''}
           </div>
           ${_readOnly ? '' : `
@@ -341,8 +365,40 @@ const ReportView = (() => {
         ${note.responsible ? `<div class="note-responsible">👷 אחראי: ${escHtml(note.responsible)}</div>` : ''}
         ${mediaHtml}
         ${planMarkupsHtml}
+        ${trackHtml}
       </div>
     `;
+  }
+
+  // ── STATUS TRACKING (per finding) ────────────────────────────────────────────
+  // Each handler mutates the in-memory note (so _allNotes stays current) and
+  // persists via Storage.Notes.save — which is fully offline-aware (optimistic
+  // local write + queued upsert that syncs when connectivity returns).
+  function _findNote(id) { return _allNotes.find(n => n.id === id); }
+
+  async function toggleComplete(noteId) {
+    const note = _findNote(noteId);
+    if (!note) return;
+    note.status = note.status === 'done' ? 'open' : 'done';
+    await Storage.Notes.save(note);
+    App.toast(note.status === 'done' ? 'סומן כהושלם' : 'הוחזר לפתוח');
+    rerenderNotesArea();
+  }
+
+  async function togglePersonalTask(noteId) {
+    const note = _findNote(noteId);
+    if (!note) return;
+    note.personalTask = !note.personalTask;
+    await Storage.Notes.save(note);
+    App.toast(note.personalTask ? 'נוסף למשימות אישיות' : 'הוסר מהמשימות האישיות');
+    rerenderNotesArea();
+  }
+
+  async function saveStatusNote(noteId, value) {
+    const note = _findNote(noteId);
+    if (!note || (note.statusNote || '') === (value || '')) return;  // skip no-op
+    note.statusNote = value;
+    await Storage.Notes.save(note);
   }
 
   async function refreshNotes() {
@@ -437,6 +493,7 @@ const ReportView = (() => {
     render, cleanup,
     toggleEditHeader, cancelEditHeader, saveHeader,
     editNote, deleteNote,
+    toggleComplete, togglePersonalTask, saveStatusNote,
     openLightbox, exportPdf, shareEmail,
     toggleTag, clearTags, exportFiltered,
   };

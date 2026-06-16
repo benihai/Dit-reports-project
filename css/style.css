@@ -1558,3 +1558,77 @@ input[type="password"]:focus {
   padding: 2px;
   line-height: 1;
 }
+
+/* ── Status tracking: per-finding controls + personal-tasks dashboard ───────── */
+.note-card-done { border-right-color: var(--green-dark); background: var(--green-bg); }
+.note-card-done .note-description { opacity: .72; }
+
+.done-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  background: var(--green-dark); color: #fff;
+  font-size: .68rem; font-weight: 700;
+  padding: 2px 8px; border-radius: 999px;
+}
+
+.note-track {
+  margin-top: 10px; padding-top: 10px;
+  border-top: 1px dashed var(--border);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.note-track-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.track-btn {
+  flex: 1 1 auto;
+  font-family: inherit; font-size: .8rem; font-weight: 600;
+  padding: 7px 10px; border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border); background: #fff; color: var(--text-muted);
+  cursor: pointer; transition: all .15s; white-space: nowrap;
+}
+.track-btn:hover { border-color: var(--green-mid); background: var(--green-light); }
+.track-btn.done-toggle.active {
+  background: var(--green-dark); border-color: var(--green-dark); color: #fff;
+}
+.track-btn.task-toggle.active {
+  background: #fff7e0; border-color: #e3b341; color: #8a6d1a;
+}
+
+.status-note-input {
+  width: 100%; min-height: 38px; resize: vertical;
+  font-family: inherit; font-size: .82rem; line-height: 1.4; color: var(--text);
+  padding: 8px 10px; border: 1.5px solid var(--border-light);
+  border-radius: var(--radius-sm); background: var(--green-bg);
+}
+.status-note-input:focus { outline: none; border-color: var(--green-mid); background: #fff; }
+
+.note-status-ro {
+  margin-top: 8px; font-size: .8rem; color: var(--text-muted);
+  background: var(--green-bg); border-radius: var(--radius-sm); padding: 6px 10px;
+}
+
+/* Personal-tasks dashboard */
+.pt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.pt-empty {
+  grid-column: 1 / -1; text-align: center; color: var(--text-light);
+  font-size: .9rem; padding: 20px; border: 1.5px dashed var(--border);
+  border-radius: var(--radius); background: var(--green-bg);
+}
+.pt-card {
+  border: 1px solid var(--border); border-right: 4px solid var(--green);
+  border-radius: var(--radius); background: #fff; padding: 12px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.pt-card.pt-done { border-right-color: var(--green-dark); background: var(--green-bg); }
+.pt-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pt-context { font-size: .72rem; font-weight: 700; color: var(--green-dark); }
+.pt-untrack {
+  background: none; border: none; color: var(--text-light); cursor: pointer;
+  font-size: 15px; line-height: 1; padding: 2px 4px; border-radius: 4px;
+}
+.pt-untrack:hover { color: #dc2626; background: #fde8e8; }
+.pt-desc { font-size: .9rem; font-weight: 600; color: var(--text); }
+.pt-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pt-open {
+  font-size: .8rem; font-weight: 600; color: var(--green-dark);
+  text-decoration: none; white-space: nowrap;
+}
+.pt-open:hover { text-decoration: underline; }
