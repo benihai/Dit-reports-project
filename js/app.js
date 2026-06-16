@@ -17,8 +17,10 @@ const App = (() => {
       if (logo) logo.style.opacity = '1';
     }
     if (hTitle) {
-      if (title) { hTitle.textContent = title; hTitle.classList.add('visible'); hTitle.style.textAlign = 'center'; }
-      else        hTitle.classList.remove('visible');
+      // Clear the text when empty — the title is now a flex spacer (no longer
+      // display:none), so a stale title must not linger on the home screen.
+      hTitle.textContent = title || '';
+      hTitle.classList.toggle('visible', !!title);
     }
   }
 

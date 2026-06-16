@@ -52,9 +52,8 @@ body {
 .header-logo {
   height: 38px;
   width: auto;
-  flex: 1;
+  flex: 0 0 auto;
   object-fit: contain;
-  object-position: right center;
   transition: opacity .2s;
   cursor: pointer;
 }
@@ -80,22 +79,21 @@ body {
   align-items: center;
 }
 
+/* A real flex item between the logo (right) and the action buttons (left): it
+   takes the middle space, centers its text, and truncates with an ellipsis so
+   it can never overlap the logo or buttons. When empty it acts as a spacer that
+   keeps the actions pushed to the left edge. */
 #header-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: center;
   font-size: .95rem;
   font-weight: 700;
   color: var(--charcoal);
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
   white-space: nowrap;
-  display: none;
-  /* Stay centered without colliding with the back button / action buttons on
-     either side; long titles are truncated with an ellipsis instead. */
-  max-width: 50%;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-#header-title.visible { display: block; }
 
 /* ── LAYOUT ── */
 .main-content {
