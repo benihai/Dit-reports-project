@@ -486,8 +486,15 @@ const PdfExport = (() => {
         ${metadataBlockHtml(report, project)}
         ${filterBanner}
         ${findingsHtml}
-        ${summaryBlockHtml(report)}
-        ${docFooterHtml(report, clientName)}
+
+        <!-- Closing block: summary + footer stay together (break-inside:avoid)
+             AND bind to the last finding (break-before:avoid) so neither the
+             summary nor the footer ever lands on a page of its own. -->
+        <div data-report-closing-block="1"
+             style="break-before:avoid;page-break-before:avoid;break-inside:avoid;page-break-inside:avoid;">
+          ${summaryBlockHtml(report)}
+          ${docFooterHtml(report, clientName)}
+        </div>
       </div>`;
   }
 
@@ -601,10 +608,6 @@ const PdfExport = (() => {
 
       [data-finding-card] { break-inside: avoid; page-break-inside: avoid; }
       figure, img { page-break-inside: avoid; break-inside: avoid; }
-      /* Keep the dark footer bar on the same page as the last finding —
-         never let it spill onto a page of its own. break-before:avoid binds
-         it to the preceding block (last finding / summary). */
-      footer { break-before: avoid; page-break-before: avoid; break-inside: avoid; page-break-inside: avoid; }
     }
     img { max-width: 100%; }
     figure { margin: 0; }
