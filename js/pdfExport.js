@@ -595,83 +595,27 @@ const PdfExport = (() => {
     const _date = (report.date || '').split('-').reverse().join('-');
     const fname = [ _desc || ('דוח ' + report.reportNumber), _proj, _date ].filter(Boolean).join(' - ');
 
-    const fullDoc = `<!DOCTYPE html>
+    const win = window.open('', '_blank');
+    if (!win) { App.toast('יש לאפשר חלון קופץ בדפדפן'); return; }
+
+    win.document.write(`<!DOCTYPE html>
 <html dir="rtl" lang="he">
 <head>
   <meta charset="utf-8">
-  <title>${esc(fname)}</title>
+  <title>${fname}</title>
   <style>${_PRINT_CSS}</style>
 </head>
 <body>${html}</body>
-</html>`;
-
-    // Server-side render (headless Chrome) gives an identical PDF on every device
-    // — the only fix for iPhone, where Safari's print engine mangles the layout.
-    // Falls back to the browser's own print() when not configured or offline.
-    if (CONFIG.PDF_RENDER_URL && navigator.onLine) {
-      try {
-        await _serverRenderPdf(fullDoc, fname);
-        return;
-      } catch (err) {
-        console.error('server PDF render failed, falling back to print()', err);
-        App.toast('שרת ה-PDF לא זמין — מנפיק דרך הדפדפן');
-      }
-    }
-    await _printWindow(fullDoc);
-  }
-
-  // Upload the HTML to a short-lived private Storage object, hand its signed URL
-  // to the render function, download the returned PDF, then delete the temp file.
-  async function _serverRenderPdf(fullDoc, fname) {
-    const uid = (typeof Auth !== 'undefined' && Auth.getUser?.()?.id) || 'anon';
-    const rand = (self.crypto?.randomUUID?.()) || (Date.now() + '-' + Math.random().toString(36).slice(2));
-    const path = `${uid}/${rand}.html`;
-    App.showLoading('מייצר PDF...');
-    try {
-      const blob = new Blob([fullDoc], { type: 'text/html' });
-      const up = await _supabase.storage.from('pdf-temp').upload(path, blob, { contentType: 'text/html', upsert: true });
-      if (up.error) throw up.error;
-
-      const signed = await _supabase.storage.from('pdf-temp').createSignedUrl(path, 120);
-      if (signed.error) throw signed.error;
-
-      const resp = await fetch(CONFIG.PDF_RENDER_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ htmlUrl: signed.data.signedUrl }),
-      });
-      if (!resp.ok) throw new Error('render HTTP ' + resp.status + ' ' + (await resp.text().catch(() => '')));
-
-      _downloadBlob(await resp.blob(), fname + '.pdf');
-    } finally {
-      App.hideLoading();
-      _supabase.storage.from('pdf-temp').remove([path]).catch(() => {});
-    }
-  }
-
-  function _downloadBlob(blob, filename) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
-  }
-
-  // Fallback: the original browser-print path (great in Chrome, weak on iOS).
-  async function _printWindow(fullDoc) {
-    const win = window.open('', '_blank');
-    if (!win) { App.toast('יש לאפשר חלון קופץ בדפדפן'); return; }
-    win.document.write(fullDoc);
+</html>`);
     win.document.close();
+
     await new Promise(resolve => {
       if (win.document.readyState === 'complete') { resolve(); return; }
       win.addEventListener('load', resolve, { once: true });
       setTimeout(resolve, 4000);
     });
     await win.document.fonts.ready.catch(() => {});
+
     win.focus();
     win.print();
     win.addEventListener('afterprint', () => win.close());

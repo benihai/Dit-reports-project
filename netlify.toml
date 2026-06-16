@@ -1,18 +1,6 @@
 [build]
   publish = "."
   command = ""
-  [build.environment]
-    NODE_VERSION = "20"
-
-# PDF renderer (netlify/functions/render-pdf.js) needs the headless Chromium
-# binary shipped alongside it. Keep @sparticuz/chromium external (don't let
-# esbuild inline it) and include its files in the function bundle.
-[functions]
-  node_bundler = "esbuild"
-
-[functions."render-pdf"]
-  external_node_modules = ["@sparticuz/chromium"]
-  included_files = ["node_modules/@sparticuz/chromium/**"]
 
 # Service worker must never be cached — always fetch fresh
 [[headers]]
