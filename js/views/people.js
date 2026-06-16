@@ -27,6 +27,79 @@ const PeopleView = (() => {
     `;
   }
 
+  // ── PERSONAL TASKS DASHBOARD ──────────────────────────────────────────────
+  // Findings the user flagged "★ למעקב" across all reports, actionable here
+  // without opening the report. Every action persists via Storage.Notes.save,
+  // which is offline-aware (optimistic write + queued sync).
+  let _tasks = [];
+
+  function shortDesc(text) {
+    const first = String(text || '').split('\n')[0].trim();
+    return first.length > 120 ? first.slice(0, 117) + '…' : (first || '—');
+  }
+
+  function taskCardHtml(t) {
+    const done = t.status === 'done';
+    const ctx = [t.projectName, t.reportNumber ? `דוח #${t.reportNumber}` : '']
+      .filter(Boolean).join(' · ');
+    return `
+      <div class="pt-card${done ? ' pt-done' : ''}">
+        <div class="pt-card-head">
+          <span class="pt-context">${escHtml(ctx)}</span>
+          <button class="pt-untrack" title="הסר מהמעקב" onclick="PeopleView.taskUntrack('${t.id}')">✕</button>
+        </div>
+        <div class="pt-desc">${escHtml(shortDesc(t.description))}</div>
+        <textarea class="status-note-input" placeholder="סטטוס ביצוע — מה מעכב? דגשים להשלמה…"
+          onblur="PeopleView.taskSaveNote('${t.id}', this.value)">${escHtml(t.statusNote)}</textarea>
+        <div class="pt-actions">
+          <button class="track-btn done-toggle${done ? ' active' : ''}" onclick="PeopleView.taskComplete('${t.id}')">
+            ${done ? '✓ הושלם' : 'סמן כהושלם'}
+          </button>
+          <a class="pt-open" href="#/report/${t.reportId}">פתח דוח →</a>
+        </div>
+      </div>`;
+  }
+
+  function taskListHtml() {
+    if (!_tasks.length) {
+      return `<div class="pt-empty">אין משימות אישיות עדיין. פתח דוח וסמן ממצא ב־"☆ הוסף למעקב" כדי שיופיע כאן.</div>`;
+    }
+    return _tasks.map(taskCardHtml).join('');
+  }
+
+  function _renderTasks() {
+    const body = document.getElementById('personal-tasks-body');
+    if (body) body.innerHTML = taskListHtml();
+    const cnt = document.getElementById('pt-count');
+    if (cnt) cnt.textContent = _tasks.length;
+  }
+
+  function _findTask(id) { return _tasks.find(t => t.id === id); }
+
+  async function taskComplete(id) {
+    const t = _findTask(id);
+    if (!t) return;
+    t.status = t.status === 'done' ? 'open' : 'done';
+    await Storage.Notes.save(t);
+    _renderTasks();
+  }
+
+  async function taskSaveNote(id, value) {
+    const t = _findTask(id);
+    if (!t || (t.statusNote || '') === (value || '')) return;
+    t.statusNote = value;
+    await Storage.Notes.save(t);
+  }
+
+  async function taskUntrack(id) {
+    const t = _findTask(id);
+    if (!t) return;
+    t.personalTask = false;
+    await Storage.Notes.save(t);
+    _tasks = _tasks.filter(x => x.id !== id);
+    _renderTasks();
+  }
+
   async function render({ headerActionsHtml } = {}) {
     const addBtn = `
       <button class="btn-icon" onclick="PeopleView.openAddPerson()" title="הוסף מנהל פרויקטים">
@@ -40,8 +113,18 @@ const PeopleView = (() => {
 
     const people = await Storage.People.getAll();
     const countMap = await Storage.Projects.countsByPerson(people.map(p => p.id));
+    // Personal-tasks dashboard data (cross-report). Offline/error → empty list.
+    _tasks = await Storage.Notes.getPersonalTasks().catch(() => []);
 
     const container = document.getElementById('view-container');
+
+    const tasksSection = `
+      <div class="screen-title" style="margin-top:18px;">
+        <span>משימות אישיות מסיורים</span>
+        <span class="badge badge-gray" id="pt-count">${_tasks.length}</span>
+      </div>
+      <div id="personal-tasks-body" class="pt-grid">${taskListHtml()}</div>
+    `;
 
     const welcomeBanner = `
       <div class="welcome-banner" style="text-align:center;">
@@ -76,7 +159,7 @@ const PeopleView = (() => {
       <div class="people-grid">
         ${people.map(p => personCardHtml(p, countMap[p.id] || 0)).join('')}
       </div>
-    `;
+    ` + tasksSection;
   }
 
   function openAddPerson() {
@@ -132,5 +215,6 @@ const PeopleView = (() => {
     });
   }
 
-  return { render, openAddPerson, closeAddPerson, submitAddPerson, deletePerson };
+  return { render, openAddPerson, closeAddPerson, submitAddPerson, deletePerson,
+           taskComplete, taskSaveNote, taskUntrack };
 })();

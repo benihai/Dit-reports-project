@@ -120,10 +120,10 @@ const Storage = (() => {
 
   function mapNote(r) {
     if (!r) return null;
-    return { id: r.id, reportId: r.report_id, noteNumber: r.note_number || null, floor: r.floor || '', area: r.area || '', description: r.description || '', responsible: r.responsible || '', responsibilityType: r.responsibility_type || '', tag: r.tag || '', urgency: r.urgency || 'medium', status: r.status || 'open', mediaItems: r.media_items || [], planMarkups: r.plan_markups || [], createdAt: r.created_at };
+    return { id: r.id, reportId: r.report_id, noteNumber: r.note_number || null, floor: r.floor || '', area: r.area || '', description: r.description || '', responsible: r.responsible || '', responsibilityType: r.responsibility_type || '', tag: r.tag || '', urgency: r.urgency || 'medium', status: r.status || 'open', statusNote: r.status_note || '', personalTask: !!r.personal_task, mediaItems: r.media_items || [], planMarkups: r.plan_markups || [], createdAt: r.created_at };
   }
   function noteToRow(n) {
-    return { id: n.id, report_id: n.reportId, floor: n.floor || null, area: n.area || null, description: n.description || null, responsible: n.responsible || null, responsibility_type: n.responsibilityType || null, tag: n.tag || null, urgency: n.urgency || 'medium', status: n.status || 'open', media_items: n.mediaItems || [], plan_markups: n.planMarkups || [], created_at: n.createdAt };
+    return { id: n.id, report_id: n.reportId, floor: n.floor || null, area: n.area || null, description: n.description || null, responsible: n.responsible || null, responsibility_type: n.responsibilityType || null, tag: n.tag || null, urgency: n.urgency || 'medium', status: n.status || 'open', status_note: n.statusNote || null, personal_task: !!n.personalTask, media_items: n.mediaItems || [], plan_markups: n.planMarkups || [], created_at: n.createdAt };
   }
 
   function mapPlan(r) {
@@ -489,6 +489,26 @@ const Storage = (() => {
         return counts;
       }
     },
+    // All findings the user flagged as a personal task, across every report,
+    // with project/report context for the dashboard. Cached + offline fallback.
+    async getPersonalTasks() {
+      return _query('personal_tasks', async () => {
+        const { data, error } = await _supabase
+          .from('notes')
+          .select('*, reports!inner(report_number, description, project_id, projects!inner(name, people(name)))')
+          .eq('personal_task', true)
+          .order('created_at', { ascending: false });
+        throwIf(error);
+        return (data || []).map(row => ({
+          ...mapNote(row),
+          reportNumber: row.reports?.report_number || null,
+          reportDesc:   row.reports?.description    || '',
+          projectId:    row.reports?.project_id     || '',
+          projectName:  row.reports?.projects?.name || '',
+          personName:   row.reports?.projects?.people?.name || '',
+        }));
+      }, { fallback: [] });
+    },
     async get(id) {
       try {
         const { data, error } = await _supabase.from('notes').select('*').eq('id', id).maybeSingle();
@@ -508,6 +528,9 @@ const Storage = (() => {
         : [...cached, note];
       _mSet(key, updated);
       _lfSetForce(key, updated);
+      // The personal-tasks dashboard is a cross-report aggregate — drop its
+      // memory cache so it re-derives after a status/task/note change.
+      _mClear('personal_tasks');
       // Sync to Supabase in background
       _enqueuePendingWrite('note', 'upsert', note);
       _flushPendingWrites();
@@ -526,6 +549,7 @@ const Storage = (() => {
       } else {
         _mClear('notes_');
       }
+      _mClear('personal_tasks');
       _enqueuePendingWrite('note', 'delete', { id });
       _flushPendingWrites();
     }

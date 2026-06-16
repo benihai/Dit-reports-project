@@ -278,6 +278,7 @@ const PdfExport = (() => {
             <span style="font-family:monospace;font-size:11px;font-weight:700;
                          background:#1A1A1A;color:#fff;padding:3px 12px;
                          border-radius:999px;white-space:nowrap;flex-shrink:0;">ממצא ${num}</span>
+            ${note.status === 'done' ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;background:#4a8a20;color:#fff;padding:3px 10px;border-radius:999px;white-space:nowrap;flex-shrink:0;">✓ הושלם</span>` : ''}
             ${note.floor ? `<span style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:#3A3A3A;white-space:nowrap;">📍 ${esc(note.floor)}</span>` : ''}
             ${note.area  ? `<span style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:#3A3A3A;white-space:nowrap;">🚪 ${esc(note.area)}</span>` : ''}
             ${tagChipHtml(note.tag)}
@@ -290,6 +291,14 @@ const PdfExport = (() => {
           <div style="font-family:'Heebo',Arial,sans-serif;font-size:13px;color:#1A1A1A;
                       line-height:1.7;white-space:pre-line;direction:rtl;text-align:right;">${esc(note.description).trim()}</div>
           ${note.responsible ? `<div style="margin-top:8px;font-size:12px;color:#3A3A3A;direction:rtl;text-align:right;">${icon('user',13,'#9A9A9A')} <b>אחריות:</b> ${esc(note.responsible)}</div>` : ''}
+          ${note.statusNote ? `
+          <div style="margin-top:10px;padding:8px 12px;background:#f5f7f2;border:1px solid #d4e8b0;
+                      border-right:3px solid #4a8a20;border-radius:6px;direction:rtl;text-align:right;">
+            <div style="font-size:10px;color:#4a8a20;font-weight:700;letter-spacing:.04em;margin-bottom:3px;">
+              ${note.status === 'done' ? 'סטטוס ביצוע · הושלם' : 'סטטוס ביצוע'}
+            </div>
+            <div style="font-size:12px;color:#3A3A3A;line-height:1.6;white-space:pre-line;">${esc(note.statusNote).trim()}</div>
+          </div>` : ''}
           ${imagesHtml}${markupsHtml}${videoHtml}
         </div>
       </article>`;
