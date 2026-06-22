@@ -1,4 +1,4 @@
-const CACHE = 'dit-v62';
+const CACHE = 'dit-v63';
 
 const SHELL = [
   './',
@@ -25,6 +25,7 @@ const SHELL = [
   './js/views/reports.js',
   './js/views/noteModal.js',
   './js/views/report.js',
+  './js/views/publicStatus.js',
   './js/emailShare.js',
   './js/app.js',
   './icons/dit-logo.png',

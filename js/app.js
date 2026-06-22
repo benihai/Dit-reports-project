@@ -366,6 +366,15 @@ const App = (() => {
   // ── Boot ───────────────────────────────────────────────────────────────────
 
   async function init() {
+    // Public status page (#/public/<token>): unauthenticated — an external
+    // recipient fills statuses with no login. Render it and skip the whole auth
+    // / routing boot. It talks to Supabase only through the anon RPCs.
+    if (location.hash.startsWith('#/public/')) {
+      hideLoading();
+      if (typeof PublicStatus !== 'undefined') PublicStatus.render();
+      return;
+    }
+
     // Register service worker for offline support.
     // When a new SW activates (new deployment), reload automatically so the
     // user always gets fresh code — but only if the app hasn't started yet

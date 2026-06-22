@@ -108,54 +108,89 @@ const NoteModal = (() => {
   function responsibilityFieldHtml(note) {
     const savedType = note?.responsibilityType || '';
     const savedResp = note?.responsible || '';
+    const presetOptions = RESPONSIBILITY_OPTIONS.filter(o => o !== CUSTOM_OPTION);
 
-    // שחזור הבחירה בעת עריכה (כולל ממצאים ישנים ללא responsibilityType)
-    let initType = '', initCustom = '';
-    if (savedType) {
-      initType   = savedType;
-      initCustom = (savedType === CUSTOM_OPTION) ? savedResp : '';
+    // Restore selection. responsibilityType may be a comma-joined list (new
+    // multi-select) or a single value (old); legacy notes carry only the
+    // `responsible` text, which we parse back into presets + custom text.
+    let selected = [], customText = '', customOn = false;
+    const types = savedType ? savedType.split(',').map(s => s.trim()).filter(Boolean) : [];
+    if (types.length) {
+      types.forEach(t => {
+        if (t === CUSTOM_OPTION) customOn = true;
+        else if (presetOptions.includes(t)) selected.push(t);
+      });
+      if (customOn) {
+        customText = savedResp.split(',').map(s => s.trim()).filter(Boolean)
+          .filter(p => !presetOptions.includes(p)).join(', ');
+      }
     } else if (savedResp) {
-      if (RESPONSIBILITY_OPTIONS.includes(savedResp)) { initType = savedResp; }
-      else { initType = CUSTOM_OPTION; initCustom = savedResp; }
+      savedResp.split(',').map(s => s.trim()).filter(Boolean).forEach(p => {
+        if (presetOptions.includes(p)) selected.push(p);
+        else { customOn = true; customText = customText ? customText + ', ' + p : p; }
+      });
     }
 
-    const options = [`<option value="" ${initType ? '' : 'selected'}>— בחר גורם אחראי —</option>`]
-      .concat(RESPONSIBILITY_OPTIONS.map(o =>
-        `<option value="${escHtml(o)}" ${o === initType ? 'selected' : ''}>${escHtml(o)}</option>`))
-      .join('');
+    const chips = presetOptions.map(o => `
+        <label class="resp-chip ${selected.includes(o) ? 'checked' : ''}">
+          <input type="checkbox" class="resp-cb" value="${escHtml(o)}" ${selected.includes(o) ? 'checked' : ''}
+                 onchange="NoteModal.onResponsibilityChange()">
+          ${escHtml(o)}
+        </label>`).join('');
 
-    const customHidden = (initType === CUSTOM_OPTION) ? '' : 'hidden';
-    const tag = tagForResponsibility(initType);
-    const previewHidden = initType ? '' : 'hidden';
+    const any = selected.length || customOn;
+    const tag = _tagForSelection(selected, customOn);
 
     return `
       <div class="form-group">
-        <label>אחריות</label>
-        <select id="note-responsibility-type" onchange="NoteModal.onResponsibilityChange()">
-          ${options}
-        </select>
+        <label>אחריות <span style="font-weight:400;color:var(--text-light);font-size:.8rem;">(אפשר לבחור כמה)</span></label>
+        <div class="resp-chips" id="note-responsibility-chips">
+          ${chips}
+          <label class="resp-chip ${customOn ? 'checked' : ''}">
+            <input type="checkbox" id="note-resp-custom-cb" ${customOn ? 'checked' : ''}
+                   onchange="NoteModal.onResponsibilityChange()">
+            ${escHtml(CUSTOM_OPTION)}
+          </label>
+        </div>
       </div>
-      <div class="form-group ${customHidden}" id="note-responsible-custom-group">
-        <label>פרט את הגורם האחראי <span class="required">*</span></label>
+      <div class="form-group ${customOn ? '' : 'hidden'}" id="note-responsible-custom-group">
+        <label>פרט גורם אחראי נוסף</label>
         <input type="text" id="note-responsible-custom" placeholder="הקלד גורם אחראי..."
-               value="${escHtml(initCustom)}">
+               value="${escHtml(customText)}">
       </div>
-      <div class="tag-preview ${previewHidden}" id="note-tag-preview">
+      <div class="tag-preview ${any ? '' : 'hidden'}" id="note-tag-preview">
         תיוג אוטומטי:
         <span class="tag-badge tag-${tagSlug(tag)}" id="note-tag-badge">${escHtml(tag)}</span>
       </div>
     `;
   }
 
+  // Tag follows the first selected preset; falls back to the custom tag.
+  function _tagForSelection(selected, customOn) {
+    for (const s of selected) { if (TAG_MAP[s]) return TAG_MAP[s]; }
+    return customOn ? CUSTOM_TAG : '';
+  }
+  // Read the current responsibility selection from the open modal.
+  function _readResponsibility() {
+    const cbs = document.querySelectorAll('#note-responsibility-chips .resp-cb:checked');
+    const selected = Array.from(cbs).map(cb => cb.value);
+    const customOn = document.getElementById('note-resp-custom-cb')?.checked || false;
+    const customText = customOn ? (document.getElementById('note-responsible-custom')?.value.trim() || '') : '';
+    return { selected, customOn, customText };
+  }
+
   // נקרא בכל שינוי ב-Dropdown: פתיחת/סגירת טקסט חופשי + עדכון תצוגת התג
   function onResponsibilityChange() {
-    const type        = document.getElementById('note-responsibility-type')?.value || '';
+    // Sync chip visuals to checkbox state.
+    document.querySelectorAll('#note-responsibility-chips .resp-chip').forEach(chip => {
+      const cb = chip.querySelector('input[type=checkbox]');
+      chip.classList.toggle('checked', !!cb?.checked);
+    });
+    const customOn    = document.getElementById('note-resp-custom-cb')?.checked || false;
     const customGroup = document.getElementById('note-responsible-custom-group');
-    const customInput = document.getElementById('note-responsible-custom');
     if (customGroup) {
-      const isCustom = (type === CUSTOM_OPTION);
-      customGroup.classList.toggle('hidden', !isCustom);
-      if (isCustom) setTimeout(() => customInput?.focus(), 50);
+      customGroup.classList.toggle('hidden', !customOn);
+      if (customOn) setTimeout(() => document.getElementById('note-responsible-custom')?.focus(), 50);
     }
     updateTagPreview();
   }
@@ -164,10 +199,10 @@ const NoteModal = (() => {
   function updateTagPreview() {
     const preview = document.getElementById('note-tag-preview');
     const badge   = document.getElementById('note-tag-badge');
-    const type    = document.getElementById('note-responsibility-type')?.value || '';
     if (!preview || !badge) return;
-    if (!type) { preview.classList.add('hidden'); return; }
-    const tag = tagForResponsibility(type);
+    const { selected, customOn } = _readResponsibility();
+    if (!selected.length && !customOn) { preview.classList.add('hidden'); return; }
+    const tag = _tagForSelection(selected, customOn);
     badge.textContent = tag;
     badge.className   = `tag-badge tag-${tagSlug(tag)}`;
     preview.classList.remove('hidden');
@@ -388,16 +423,16 @@ const NoteModal = (() => {
     const description = document.getElementById('note-description').value.trim();
     if (!description) { App.toast('נא לתאר את הממצא'); return; }
 
-    // אחריות + תיוג אוטומטי
-    const respType = document.getElementById('note-responsibility-type')?.value || '';
-    let responsible = '';
-    if (respType === CUSTOM_OPTION) {
-      responsible = document.getElementById('note-responsible-custom')?.value.trim() || '';
-      if (!responsible) { App.toast('נא לפרט את הגורם האחראי'); return; }
-    } else if (respType) {
-      responsible = respType;
+    // אחריות (ריבוי בחירה) + תיוג אוטומטי
+    const { selected, customOn, customText } = _readResponsibility();
+    if (customOn && !customText) { App.toast('נא לפרט את הגורם האחראי'); return; }
+    const respParts = [...selected];
+    if (customOn && customText) {
+      customText.split(',').map(s => s.trim()).filter(Boolean).forEach(p => respParts.push(p));
     }
-    const tag = tagForResponsibility(respType);
+    const responsible = respParts.join(', ');
+    const respType    = [...selected, ...(customOn ? [CUSTOM_OPTION] : [])].join(', ');
+    const tag         = _tagForSelection(selected, customOn);
 
     App.showLoading('שומר...');
     try {

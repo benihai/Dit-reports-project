@@ -112,7 +112,7 @@ const Storage = (() => {
 
   function mapReport(r) {
     if (!r) return null;
-    return { id: r.id, projectId: r.project_id, reportNumber: r.report_number, siteName: r.site_name || '', description: r.description || '', date: r.date || '', inspector: r.inspector || '', participants: r.participants || '', floors: r.floors || '', summary: r.summary || '', status: r.status || 'draft', createdAt: r.created_at };
+    return { id: r.id, projectId: r.project_id, reportNumber: r.report_number, siteName: r.site_name || '', description: r.description || '', date: r.date || '', inspector: r.inspector || '', participants: r.participants || '', floors: r.floors || '', summary: r.summary || '', status: r.status || 'draft', publicToken: r.public_token || '', createdAt: r.created_at };
   }
   function reportToRow(r) {
     return { id: r.id, project_id: r.projectId, report_number: r.reportNumber, site_name: r.siteName || null, description: r.description || null, date: r.date || null, inspector: r.inspector || null, participants: r.participants || null, floors: r.floors || null, summary: r.summary || null, status: r.status || 'draft', created_at: r.createdAt, created_by: Auth.getUser()?.id };
@@ -614,5 +614,34 @@ const Storage = (() => {
     }
   }
 
-  return { generateId, People, Projects, Reports, Notes, Plans, retryFailedWrites, syncState: _syncStats, prefetchForOffline };
+  // ── PUBLIC SHARING / SUB-REPORTS ────────────────────────────────────────────
+  // Anonymous status collection: a recipient opens a token link, reads the
+  // report, fills per-finding statuses and submits a "sub-report". Both calls go
+  // through SECURITY DEFINER RPCs so the anon key never touches the tables.
+  const Public = {
+    async getReport(token) {
+      const { data, error } = await _supabase.rpc('get_public_report', { p_token: token });
+      throwIf(error);
+      return data;   // { report, notes } | null
+    },
+    async submit(token, name, role, responses) {
+      const { data, error } = await _supabase.rpc('submit_sub_report',
+        { p_token: token, p_name: name, p_role: role, p_responses: responses });
+      throwIf(error);
+      return data;   // new sub-report id
+    },
+  };
+
+  const SubReports = {
+    async getForReport(reportId) {
+      return _query(`subreports_${reportId}`, async () => {
+        const { data, error } = await _supabase.from('sub_reports')
+          .select('*').eq('report_id', reportId).order('created_at', { ascending: false });
+        throwIf(error);
+        return data || [];
+      }, { fallback: [] });
+    },
+  };
+
+  return { generateId, People, Projects, Reports, Notes, Plans, Public, SubReports, retryFailedWrites, syncState: _syncStats, prefetchForOffline };
 })();
