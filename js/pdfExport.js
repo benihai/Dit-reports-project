@@ -180,7 +180,7 @@ const PdfExport = (() => {
           <div style="font-size:11px;color:#6B6B6B;font-weight:600;
                       letter-spacing:.06em;text-transform:uppercase;
                       margin-bottom:2px;">${it.k}</div>
-          <div style="font-size:15px;color:#1A1A1A;font-weight:600;line-height:1.4;">
+          <div style="font-size:15px;color:#1A1A1A;font-weight:600;line-height:1.4;white-space:pre-line;">
             ${esc(it.v)}
           </div>
         </div>

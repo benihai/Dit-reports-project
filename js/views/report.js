@@ -4,6 +4,7 @@ const ReportView = (() => {
   let _fab       = null;
   let _allNotes  = [];            // כל הממצאים בדוח (מקור הסינון)
   let _activeTags = new Set();    // התגים הפעילים בסינון
+  let _statusFilter = '';         // '' = הכל · 'done' = הושלמו · 'open' = פתוחים
 
   function escHtml(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -34,6 +35,7 @@ const ReportView = (() => {
 
     _allNotes   = notes;
     _activeTags = new Set();
+    _statusFilter = '';
 
     App.setHeader(`דוח #${report.reportNumber}`, true, `
       <button class="btn btn-outline btn-sm" onclick="ReportView.exportPdf()">
@@ -46,6 +48,7 @@ const ReportView = (() => {
         PDF
       </button>
       <button class="btn btn-outline btn-sm" onclick="ReportView.shareEmail()">📧 שתף במייל</button>
+      ${readOnly ? '' : `<button class="btn btn-outline btn-sm" onclick="ReportView.sharePublicLink()">🔗 שתף לסטטוס</button>`}
     `);
 
     const container = document.getElementById('view-container');
@@ -73,9 +76,63 @@ const ReportView = (() => {
              <span class="breadcrumb-current">דוח #${report.reportNumber}</span>
            </div>`;
 
-    container.innerHTML = breadcrumb + headerSectionHtml(report) + notesSectionHtml(notes);
+    const subReports = readOnly ? [] : await Storage.SubReports.getForReport(reportId).catch(() => []);
+    container.innerHTML = breadcrumb + headerSectionHtml(report) + notesSectionHtml(notes)
+      + subReportsSectionHtml(subReports);
 
     if (!readOnly) attachFab(reportId);
+  }
+
+  // ── PUBLIC SHARING / SUB-REPORTS (admin) ─────────────────────────────────────
+  async function sharePublicLink() {
+    const report = await Storage.Reports.get(_reportId);
+    if (!report?.publicToken) { App.toast('לא ניתן ליצור קישור כרגע'); return; }
+    const link = `${location.origin}${location.pathname}#/public/${report.publicToken}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      App.toast('הקישור למילוי סטטוס הועתק ✓');
+    } catch (_) {
+      prompt('העתק את הקישור ושלח למי שימלא את הסטטוס:', link);
+    }
+  }
+
+  function subReportsSectionHtml(subReports) {
+    if (!subReports || !subReports.length) return '';
+    return `
+      <div class="form-section" id="sub-reports-section" style="margin-top:16px;">
+        <div class="form-section-title">דוחות משנה — סטטוס חיצוני <span class="badge badge-green">${subReports.length}</span></div>
+        ${subReports.map(subReportCardHtml).join('')}
+      </div>`;
+  }
+
+  function subReportCardHtml(sr) {
+    const responses = Array.isArray(sr.responses) ? sr.responses : [];
+    const doneN = responses.filter(r => r.status === 'done').length;
+    const date  = new Date(sr.created_at).toLocaleDateString('he-IL');
+    return `
+      <div class="sub-report-card">
+        <div class="sub-report-head" onclick="ReportView.toggleSubReport('${sr.id}')">
+          <div>
+            <div class="sub-report-title">סטטוס מאת ${escHtml(sr.filler_name)} · ${escHtml(sr.filler_role)}</div>
+            <div class="sub-report-meta">${date} · ${doneN}/${responses.length} הושלמו</div>
+          </div>
+          <span class="sub-report-toggle">▾</span>
+        </div>
+        <div class="sub-report-body hidden" id="sub-report-body-${sr.id}">
+          ${responses.map(r => `
+            <div class="sub-report-resp">
+              <span class="sub-resp-status ${r.status === 'done' ? 'done' : 'open'}">${r.status === 'done' ? '✓ הושלם' : '○ פתוח'}</span>
+              <div style="flex:1;min-width:0;">
+                <div class="sub-resp-desc">${escHtml((r.description || '').split('\n')[0] || '—')}</div>
+                ${r.note ? `<div class="sub-resp-note">${escHtml(r.note)}</div>` : ''}
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>`;
+  }
+
+  function toggleSubReport(id) {
+    document.getElementById(`sub-report-body-${id}`)?.classList.toggle('hidden');
   }
 
   // ── HEADER SECTION (editable) ────────────────────────────────────────────────
@@ -105,7 +162,7 @@ const ReportView = (() => {
         <tr><td>קומות / אזורים</td><td>${escHtml(r.floors || '—')}</td></tr>
         <tr><td>תאריך</td><td>${formatDate(r.date) || '—'}</td></tr>
         <tr><td>מבצע הסיור מטעם DIT</td><td>${escHtml(r.inspector || '—')}</td></tr>
-        <tr><td>משתתפים</td><td>${escHtml(r.participants || '—')}</td></tr>
+        <tr><td>משתתפים</td><td style="white-space:pre-line;">${escHtml(r.participants || '—')}</td></tr>
         <tr><td>סיכום והנחיות להמשך</td><td>${escHtml(r.summary || '—')}</td></tr>
       </table>
     `;
@@ -133,7 +190,7 @@ const ReportView = (() => {
       </div>
       <div class="form-group">
         <label>משתתפים</label>
-        <input type="text" id="edit-participants" placeholder="שמות המשתתפים..." value="${escHtml(r.participants || '')}">
+        <textarea id="edit-participants" rows="3" placeholder="שמות המשתתפים... (אפשר שורה לכל משתתף)">${escHtml(r.participants || '')}</textarea>
       </div>
       <div class="form-group">
         <label>סיכום והנחיות להמשך</label>
@@ -207,18 +264,31 @@ const ReportView = (() => {
     return notes.map((n, i) => noteCardHtml(n, i + 1)).join('');
   }
 
-  // הצגת רק ממצאים שתואמים את התגים הפעילים (ריק = הכל)
+  // סינון לפי תגים פעילים (ריק = הכל) ולפי סטטוס הושלם/פתוח
   function _filtered(notes) {
-    if (_activeTags.size === 0) return notes;
-    return notes.filter(n => _activeTags.has(n.tag));
+    let out = notes;
+    if (_activeTags.size) out = out.filter(n => _activeTags.has(n.tag));
+    if (_statusFilter === 'done') out = out.filter(n => n.status === 'done');
+    else if (_statusFilter === 'open') out = out.filter(n => n.status !== 'done');
+    return out;
   }
 
-  function filterBarHtml(notes) {
-    // הצג צ'יפ רק לתגים שקיימים בפועל בדוח, לפי סדר קבוע
-    const present = NoteModal.ALL_TAGS.filter(t => notes.some(n => n.tag === t));
-    if (present.length === 0) return '';
+  function _isFiltering() { return _activeTags.size > 0 || _statusFilter !== ''; }
 
-    const chips = present.map(t => {
+  function filterBarHtml(notes) {
+    if (!notes.length) return '';
+    // הצג צ'יפ תגים רק לתגים שקיימים בפועל בדוח, לפי סדר קבוע
+    const present = NoteModal.ALL_TAGS.filter(t => notes.some(n => n.tag === t));
+
+    // צ'יפ סינון "לא הושלמו" — מציג את המשימות שנותרו לטיפול
+    const openCount = notes.filter(n => n.status !== 'done').length;
+    const statusChips = `
+      <button type="button" class="filter-chip status-open ${_statusFilter === 'open' ? 'active' : ''}"
+              onclick="ReportView.toggleStatusFilter('open')">
+        לא הושלמו <span class="filter-chip-count">${openCount}</span>
+      </button>`;
+
+    const tagChips = present.map(t => {
       const count  = notes.filter(n => n.tag === t).length;
       const active = _activeTags.has(t);
       return `<button type="button" class="filter-chip tag-${NoteModal.tagSlug(t)} ${active ? 'active' : ''}"
@@ -227,10 +297,10 @@ const ReportView = (() => {
               </button>`;
     }).join('');
 
-    const clearHidden = _activeTags.size ? '' : 'hidden';
+    const clearHidden = _isFiltering() ? '' : 'hidden';
     return `
       <div class="notes-filter-bar" id="notes-filter-bar">
-        <div class="notes-filter-chips">${chips}</div>
+        <div class="notes-filter-chips">${statusChips}${tagChips}</div>
         <div class="notes-filter-actions">
           <button type="button" class="btn btn-ghost btn-sm ${clearHidden}" id="filter-clear-btn"
                   onclick="ReportView.clearTags()">נקה סינון</button>
@@ -247,7 +317,7 @@ const ReportView = (() => {
     const badge = document.getElementById('notes-count-badge');
     if (badge) {
       const shown = _filtered(_allNotes).length;
-      badge.textContent = _activeTags.size ? `${shown}/${_allNotes.length}` : _allNotes.length;
+      badge.textContent = _isFiltering() ? `${shown}/${_allNotes.length}` : _allNotes.length;
     }
   }
 
@@ -257,8 +327,15 @@ const ReportView = (() => {
     rerenderNotesArea();
   }
 
+  // Toggle the completed/open status filter — clicking the active one clears it.
+  function toggleStatusFilter(status) {
+    _statusFilter = (_statusFilter === status) ? '' : status;
+    rerenderNotesArea();
+  }
+
   function clearTags() {
     _activeTags.clear();
+    _statusFilter = '';
     rerenderNotesArea();
   }
 
@@ -495,6 +572,7 @@ const ReportView = (() => {
     editNote, deleteNote,
     toggleComplete, togglePersonalTask, saveStatusNote,
     openLightbox, exportPdf, shareEmail,
-    toggleTag, clearTags, exportFiltered,
+    sharePublicLink, toggleSubReport,
+    toggleTag, toggleStatusFilter, clearTags, exportFiltered,
   };
 })();

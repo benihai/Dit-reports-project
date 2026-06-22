@@ -663,6 +663,43 @@ textarea { resize: vertical; min-height: 85px; }
 .filter-chip.active.tag-supervision   { background: var(--green-dark); }
 .filter-chip.active.tag-other         { background: #475569; }
 
+/* צ'יפי סינון לפי סטטוס ביצוע (הושלמו / פתוחים) */
+.filter-chip.status-done { background: var(--green-light); color: var(--green-dark); border-color: var(--green); }
+.filter-chip.status-open { background: #fff4e0; color: #92600a; border-color: #f0d189; }
+.filter-chip.active.status-done { background: var(--green-dark); color: #fff; border-color: transparent; }
+.filter-chip.active.status-open { background: #92600a; color: #fff; border-color: transparent; }
+
+/* בחירת אחריות מרובה (checkbox chips) בתוך מודל הממצא */
+.resp-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.resp-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 12px; border: 1.5px solid var(--border);
+  border-radius: 999px; background: #fff; cursor: pointer;
+  font-size: .85rem; font-weight: 600; color: var(--text-muted);
+  user-select: none; transition: background .15s, border-color .15s, color .15s;
+}
+.resp-chip input { margin: 0; width: 15px; height: 15px; accent-color: var(--green-dark); cursor: pointer; }
+.resp-chip.checked { background: var(--green-light); border-color: var(--green); color: var(--green-dark); }
+
+/* כפתורי סטטוס בדף הציבורי (מילוי סטטוס חיצוני) */
+.pub-status-btn { flex: 1; padding: 9px; border: 1.5px solid #d4e8b0; background: #fff; border-radius: 6px; font-weight: 600; cursor: pointer; font-family: inherit; color: #5a6a5a; font-size: .9rem; }
+.pub-status-btn.active-done { background: #4a8a20; color: #fff; border-color: #4a8a20; }
+.pub-status-btn.active-open { background: #fff4e0; color: #92600a; border-color: #f0d189; }
+
+/* דוחות משנה (סטטוס חיצוני) בתוך מסך הדוח */
+.sub-report-card { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; overflow: hidden; }
+.sub-report-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 14px; cursor: pointer; background: var(--green-bg); }
+.sub-report-title { font-weight: 700; font-size: .92rem; color: var(--text); }
+.sub-report-meta { font-size: .78rem; color: var(--text-muted); margin-top: 2px; }
+.sub-report-toggle { color: var(--text-light); }
+.sub-report-body { padding: 4px 14px 12px; }
+.sub-report-resp { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--border-light); }
+.sub-resp-status { flex: none; font-size: .72rem; font-weight: 700; padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
+.sub-resp-status.done { background: var(--green-light); color: var(--green-dark); }
+.sub-resp-status.open { background: #fff4e0; color: #92600a; }
+.sub-resp-desc { font-size: .85rem; color: var(--text); }
+.sub-resp-note { font-size: .82rem; color: var(--text-muted); margin-top: 3px; background: var(--green-bg); padding: 5px 8px; border-radius: 5px; }
+
 /* ── PLANS (PDF floor plans) ── */
 .plan-card {
   background: white;
