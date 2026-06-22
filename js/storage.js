@@ -641,6 +641,11 @@ const Storage = (() => {
         return data || [];
       }, { fallback: [] });
     },
+    async delete(id) {
+      _mClear('subreports_');
+      const { error } = await _supabase.from('sub_reports').delete().eq('id', id);
+      throwIf(error);
+    },
   };
 
   return { generateId, People, Projects, Reports, Notes, Plans, Public, SubReports, retryFailedWrites, syncState: _syncStats, prefetchForOffline };
