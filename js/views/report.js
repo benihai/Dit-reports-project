@@ -116,7 +116,11 @@ const ReportView = (() => {
             <div class="sub-report-title">סטטוס מאת ${escHtml(sr.filler_name)} · ${escHtml(sr.filler_role)}</div>
             <div class="sub-report-meta">${date} · ${doneN}/${responses.length} הושלמו</div>
           </div>
-          <span class="sub-report-toggle">▾</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <button title="מחק סטטוס" onclick="event.stopPropagation();ReportView.deleteSubReport('${sr.id}')"
+              style="background:none;border:none;cursor:pointer;font-size:14px;opacity:.55;padding:2px 4px;">🗑</button>
+            <span class="sub-report-toggle">▾</span>
+          </div>
         </div>
         <div class="sub-report-body hidden" id="sub-report-body-${sr.id}">
           ${responses.map(r => `
@@ -133,6 +137,17 @@ const ReportView = (() => {
 
   function toggleSubReport(id) {
     document.getElementById(`sub-report-body-${id}`)?.classList.toggle('hidden');
+  }
+
+  function deleteSubReport(id) {
+    App.confirm('למחוק סטטוס זה?', async () => {
+      await Storage.SubReports.delete(id);
+      App.toast('הסטטוס נמחק');
+      const sub = await Storage.SubReports.getForReport(_reportId).catch(() => []);
+      const el = document.getElementById('sub-reports-section');
+      const html = subReportsSectionHtml(sub);
+      if (el) { if (html) el.outerHTML = html; else el.remove(); }
+    });
   }
 
   // ── HEADER SECTION (editable) ────────────────────────────────────────────────
@@ -572,7 +587,7 @@ const ReportView = (() => {
     editNote, deleteNote,
     toggleComplete, togglePersonalTask, saveStatusNote,
     openLightbox, exportPdf, shareEmail,
-    sharePublicLink, toggleSubReport,
+    sharePublicLink, toggleSubReport, deleteSubReport,
     toggleTag, toggleStatusFilter, clearTags, exportFiltered,
   };
 })();
