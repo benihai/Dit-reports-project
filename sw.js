@@ -1,4 +1,4 @@
-const CACHE = 'dit-v64';
+const CACHE = 'dit-v66';
 
 const SHELL = [
   './',
@@ -14,6 +14,7 @@ const SHELL = [
   './js/storage.js',
   './js/netStatus.js',
   './js/logoSearch.js',
+  './js/gemini.js',
   './js/pdfMarkup.js',
   './js/pdfExport.js',
   './js/views/login.js',

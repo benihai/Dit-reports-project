@@ -208,6 +208,64 @@ const NoteModal = (() => {
     preview.classList.remove('hidden');
   }
 
+  // ── AI: שכתוב ומיון חכם (Gemini) ─────────────────────────────────────────────
+  // קורא את הטקסט החופשי מתיאור הממצא, שולח ל-Gemini, וממלא קומה/אזור/אחריות
+  // ומשכתב את התיאור. דורס שדות רק כשה-AI החזיר ערך — לא מוחק מה שהמשתמש הזין.
+  async function aiEnhance() {
+    const ta  = document.getElementById('note-description');
+    const raw = ta?.value.trim();
+    if (!raw) { App.toast('כתוב קודם תיאור חופשי של הממצא'); return; }
+
+    const btn = document.getElementById('ai-enhance-btn');
+    const setBusy = (b) => {
+      if (!btn) return;
+      btn.disabled = b;
+      btn.textContent = b ? '⏳ מעבד…' : '✨ שכתוב ומיון חכם (AI)';
+    };
+
+    setBusy(true);
+    try {
+      const result = await Gemini.enhanceFinding(raw);
+      _applyAiResult(result);
+      App.toast('הממצא שוכתב ומוין ✨');
+    } catch (err) {
+      const msg = String(err?.message || err);
+      console.error('[Gemini] enhanceFinding failed:', err);
+      // אם אין מפתח מקומי והקריאה נכשלה — סביר שאנחנו מקומית ללא שרת
+      // (python http.server מחזיר 501/404 על הפונקציה). נציע להזין מפתח ולנסות שוב.
+      if (!Gemini.hasLocalKey()) {
+        const k = prompt('הזן מפתח Gemini API (יישמר בדפדפן זה בלבד):');
+        if (k && k.trim()) {
+          Gemini.setLocalKey(k.trim());
+          setBusy(false);
+          return aiEnhance();   // ניסיון חוזר עם המפתח החדש
+        }
+      }
+      App.toast('שכתוב נכשל: ' + msg);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function _applyAiResult(r) {
+    if (r.floor)       { const f = document.getElementById('note-floor');       if (f) f.value = r.floor; }
+    if (r.area)        { const a = document.getElementById('note-area');        if (a) a.value = r.area; }
+    if (r.description) { const d = document.getElementById('note-description'); if (d) d.value = r.description; }
+
+    if (r.responsibilities.length || r.customResponsibility) {
+      document.querySelectorAll('#note-responsibility-chips .resp-cb').forEach(cb => {
+        cb.checked = r.responsibilities.includes(cb.value);
+      });
+      const customCb = document.getElementById('note-resp-custom-cb');
+      if (customCb) customCb.checked = !!r.customResponsibility;
+      onResponsibilityChange();   // מסנכרן ויזואל + פותח שדה טקסט חופשי + מעדכן תג
+      if (r.customResponsibility) {
+        const inp = document.getElementById('note-responsible-custom');
+        if (inp) inp.value = r.customResponsibility;
+      }
+    }
+  }
+
   // ── OPEN ─────────────────────────────────────────────────────────────────────
   async function open(reportId, noteId = null, onSave = null) {
     _reportId    = reportId;
@@ -276,7 +334,14 @@ const NoteModal = (() => {
             <div class="form-section-title">פרטי הממצא</div>
             <div class="form-group">
               <label>תיאור הממצא <span class="required">*</span></label>
-              <textarea id="note-description" placeholder="תאר את הממצא בפירוט..." rows="4">${escHtml(note?.description || '')}</textarea>
+              <textarea id="note-description" placeholder="תאר את הממצא במילים שלך — כולל קומה, אזור ואחריות. למשל: בקומה 3 בחדר שינה חסר כיסוי לשקע חשמל, באחריות קבלן החשמל" rows="4">${escHtml(note?.description || '')}</textarea>
+              <button type="button" id="ai-enhance-btn" class="btn btn-outline btn-sm"
+                      onclick="NoteModal.aiEnhance()" style="margin-top:8px;">
+                ✨ שכתוב ומיון חכם (AI)
+              </button>
+              <div style="margin-top:6px;font-size:.78rem;color:var(--text-light);line-height:1.5;">
+                כתוב חופשי במילים שלך — ה-AI ימלא קומה, אזור ואחריות, וינסח את הממצא בצורה מסודרת.
+              </div>
             </div>
             ${responsibilityFieldHtml(note)}
           </div>
@@ -473,7 +538,7 @@ const NoteModal = (() => {
 
   return {
     open, handleMedia, removeMedia, annotateMedia, openPlanMarkup, removePlanMarkup, submit, close,
-    onResponsibilityChange, updateTagPreview,
+    onResponsibilityChange, updateTagPreview, aiEnhance,
     // נחשפים ל-ReportView לצורך סינון ותצוגת תגים
     ALL_TAGS, tagSlug, tagForResponsibility,
   };
