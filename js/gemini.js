@@ -2,15 +2,14 @@
 // מקבל טקסט חופשי שהמשתמש כתב (כולל קומה/אזור/אחריות במילים שלו) ומחזיר אובייקט
 // מובנה: { floor, area, responsibilities[], customResponsibility, description }.
 //
-// שני מסלולי מפתח (היברידי):
-//   1. מפתח מקומי ב-localStorage('dit:gemini_key') → קריאה ישירה ל-Google
-//      (עובד מיד עם python http.server, ללא שרת).
-//   2. אחרת → Netlify function ‎/.netlify/functions/gemini שמחזיק את המפתח
-//      כ-env var בצד שרת (מאובטח, לפרודקשן).
+// שני מסלולי מפתח:
+//   1. (ברירת מחדל) Supabase Edge Function 'gemini' — מחזיק את המפתח בצד-שרת,
+//      כך שאף משתמש לא נשאל והמפתח לא נחשף. דורש משתמש מחובר.
+//   2. (override לפיתוח) מפתח מקומי ב-localStorage('dit:gemini_key') → קריאה
+//      ישירה ל-Google. שימושי לבדיקה בלי חיבור Supabase.
 const Gemini = (() => {
   const MODEL    = 'gemini-2.5-flash';
   const LS_KEY   = 'dit:gemini_key';
-  const FN_URL   = '/.netlify/functions/gemini';
 
   // חייב להישאר תואם ל-RESPONSIBILITY_OPTIONS ב-noteModal.js (ללא 'התאמה אישית')
   const RESP_PRESETS = [
@@ -101,7 +100,7 @@ const Gemini = (() => {
 
     let data;
     if (key) {
-      // מסלול ישיר ל-Google (מפתח מקומי)
+      // מסלול ישיר ל-Google (מפתח מקומי — override לפיתוח)
       const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(key)}`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
@@ -112,19 +111,19 @@ const Gemini = (() => {
       }
       data = await res.json();
     } else {
-      // מסלול Netlify function (מפתח בצד שרת)
-      const res = await fetch(FN_URL, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: MODEL, body }),
+      // מסלול Supabase Edge Function — המפתח בצד-שרת. functions.invoke מוסיף
+      // אוטומטית Authorization (token של המשתמש המחובר) + apikey.
+      const { data: out, error } = await _supabase.functions.invoke('gemini', {
+        body: { model: MODEL, body },
       });
-      if (!res.ok) {
-        const errTxt = await res.text().catch(() => '');
-        if (res.status === 404) {
-          throw new Error('שירות ה-AI אינו זמין מקומית. הזן מפתח Gemini בהגדרות (Gemini.setLocalKey) או הרץ דרך Netlify.');
-        }
-        throw new Error(`שגיאת AI ${res.status}: ${errTxt.slice(0, 200) || res.statusText}`);
+      if (error) {
+        let detail = error.message || String(error);
+        let status = error.context?.status;
+        try { const ctx = await error.context?.json?.(); if (ctx?.error) detail = ctx.error; } catch (_) {}
+        if (status === 401) throw new Error('צריך להתחבר מחדש כדי להשתמש בשכתוב AI');
+        throw new Error('שגיאת AI: ' + detail);
       }
-      data = await res.json();
+      data = out;
     }
 
     return _parseResult(data);
